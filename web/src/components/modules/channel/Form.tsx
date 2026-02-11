@@ -10,10 +10,17 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/common/Toast';
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, X, Plus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, RefreshCw, Search, X, Plus } from 'lucide-react';
 
 export interface ChannelKeyFormItem {
     id?: number;
@@ -52,6 +59,7 @@ export interface ChannelFormProps {
     onCancel?: () => void;
     cancelText?: string;
     idPrefix?: string;
+    nestedDialogOwnerId?: string;
 }
 
 import {
@@ -71,6 +79,7 @@ export function ChannelForm({
     onCancel,
     cancelText,
     idPrefix = 'channel',
+    nestedDialogOwnerId,
 }: ChannelFormProps) {
     const t = useTranslations('channel.form');
 
@@ -97,12 +106,34 @@ export function ChannelForm({
         ? formData.custom_model.split(',').map((m) => m.trim()).filter(Boolean)
         : [];
     const [inputValue, setInputValue] = useState('');
+    const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+    const [selectedFetchedModels, setSelectedFetchedModels] = useState<string[]>([]);
+    const [fetchedModelsSearch, setFetchedModelsSearch] = useState('');
+    const [showFetchedModelsDialog, setShowFetchedModelsDialog] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const fetchModel = useFetchModel();
 
     const effectiveKey =
         formData.keys.find((k) => k.enabled && k.channel_key.trim())?.channel_key.trim() || '';
+
+    const fetchModelPayload = useMemo(() => ({
+        type: formData.type,
+        base_urls: formData.base_urls,
+        keys: formData.keys
+            .filter((k) => k.channel_key.trim())
+            .map((k) => ({ enabled: k.enabled, channel_key: k.channel_key.trim() })),
+        proxy: formData.proxy,
+        match_regex: formData.match_regex.trim() || null,
+        custom_header: formData.custom_header,
+    }), [
+        formData.type,
+        formData.base_urls,
+        formData.keys,
+        formData.proxy,
+        formData.match_regex,
+        formData.custom_header,
+    ]);
 
     const updateModels = (nextAuto: string[], nextCustom: string[]) => {
         const model = nextAuto.join(',');
@@ -111,19 +142,10 @@ export function ChannelForm({
         onFormDataChange({ ...formData, model, custom_model });
     };
 
-    const handleRefreshModels = async () => {
+    const handleRefreshModels = () => {
         if (!formData.base_urls?.[0]?.url || !effectiveKey) return;
         fetchModel.mutate(
-            {
-                type: formData.type,
-                base_urls: formData.base_urls,
-                keys: formData.keys
-                    .filter((k) => k.channel_key.trim())
-                    .map((k) => ({ enabled: k.enabled, channel_key: k.channel_key.trim() })),
-                proxy: formData.proxy,
-                match_regex: formData.match_regex.trim() || null,
-                custom_header: formData.custom_header,
-            },
+            fetchModelPayload,
             {
                 onSuccess: (data) => {
                     if (data && data.length > 0) {
@@ -141,6 +163,54 @@ export function ChannelForm({
             }
         );
     };
+
+    const handleSelectModels = () => {
+        if (!formData.base_urls?.[0]?.url || !effectiveKey) return;
+        fetchModel.mutate(
+            fetchModelPayload,
+            {
+                onSuccess: (data) => {
+                    if (data && data.length > 0) {
+                        const normalized = Array.from(new Set(data.map((m) => m.trim()).filter(Boolean)));
+                        setFetchedModels(normalized);
+                        setSelectedFetchedModels([]);
+                        setFetchedModelsSearch('');
+                        setShowFetchedModelsDialog(true);
+                        toast.success(t('modelRefreshSuccess'));
+                    } else {
+                        toast.warning(t('modelRefreshEmpty'));
+                    }
+                },
+                onError: (error) => {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    toast.error(t('modelRefreshFailed'), { description: errorMessage });
+                },
+            }
+        );
+    };
+
+    const toggleFetchedModelSelection = (model: string) => {
+        setSelectedFetchedModels((prev) =>
+            prev.includes(model)
+                ? prev.filter((m) => m !== model)
+                : [...prev, model]
+        );
+    };
+
+    const handleConfirmFetchedModels = () => {
+        if (selectedFetchedModels.length === 0) {
+            setShowFetchedModelsDialog(false);
+            return;
+        }
+        const nextAuto = Array.from(new Set([...autoModels, ...selectedFetchedModels].map((m) => m.trim()).filter(Boolean)));
+        updateModels(nextAuto, customModels);
+        setShowFetchedModelsDialog(false);
+        setSelectedFetchedModels([]);
+    };
+
+    const filteredFetchedModels = fetchedModelsSearch.trim()
+        ? fetchedModels.filter((model) => model.toLowerCase().includes(fetchedModelsSearch.trim().toLowerCase()))
+        : fetchedModels;
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();
@@ -361,19 +431,115 @@ export function ChannelForm({
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-card-foreground">{t('model')}</label>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRefreshModels}
-                        disabled={!formData.base_urls?.[0]?.url || !effectiveKey || fetchModel.isPending}
-                        className="h-6 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent"
-                    >
-                        <RefreshCw className={`h-3 w-3 mr-1 ${fetchModel.isPending ? 'animate-spin' : ''}`} />
-                        {t('modelRefresh')}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleSelectModels}
+                            disabled={!formData.base_urls?.[0]?.url || !effectiveKey || fetchModel.isPending}
+                            className="h-6 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent"
+                        >
+                            <Search className="h-3 w-3 mr-1" />
+                            {t('modelSelect')}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRefreshModels}
+                            disabled={!formData.base_urls?.[0]?.url || !effectiveKey || fetchModel.isPending}
+                            className="h-6 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent"
+                        >
+                            <RefreshCw className={`h-3 w-3 mr-1 ${fetchModel.isPending ? 'animate-spin' : ''}`} />
+                            {t('modelRefresh')}
+                        </Button>
+                    </div>
                 </div>
                 <input type="hidden" value={formData.model} required />
+
+                <Dialog
+                    open={showFetchedModelsDialog}
+                    onOpenChange={(open) => {
+                        setShowFetchedModelsDialog(open);
+                        if (!open) {
+                            setSelectedFetchedModels([]);
+                            setFetchedModelsSearch('');
+                        }
+                    }}
+                >
+                    <DialogContent
+                        data-morphing-dialog-owner={nestedDialogOwnerId}
+                        className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+                    >
+                        <DialogHeader>
+                            <DialogTitle>{t('modelSelectorTitle')}</DialogTitle>
+                            <DialogDescription>{t('modelSelectorDescription')}</DialogDescription>
+                        </DialogHeader>
+
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                value={fetchedModelsSearch}
+                                onChange={(e) => setFetchedModelsSearch(e.target.value)}
+                                placeholder={t('modelSelectorSearchPlaceholder')}
+                                className="pl-9"
+                            />
+                        </div>
+
+                        <div className="rounded-xl border border-border bg-muted/20 p-2 overflow-y-auto flex-1 min-h-48">
+                            {filteredFetchedModels.length > 0 ? (
+                                <div className="space-y-1">
+                                    {filteredFetchedModels.map((model) => {
+                                        const isSelected = selectedFetchedModels.includes(model);
+                                        const isAdded = autoModels.includes(model);
+                                        return (
+                                            <button
+                                                key={model}
+                                                type="button"
+                                                onClick={() => toggleFetchedModelSelection(model)}
+                                                className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors flex items-center justify-between gap-3 ${
+                                                    isSelected
+                                                        ? 'border-primary bg-primary/10'
+                                                        : 'border-transparent hover:border-border hover:bg-accent'
+                                                }`}
+                                            >
+                                                <span className="truncate">{model}</span>
+                                                <span className="shrink-0 flex items-center gap-1.5">
+                                                    {isAdded && (
+                                                        <Badge variant="secondary" className="text-[10px]">{t('modelSelectorAlreadyAdded')}</Badge>
+                                                    )}
+                                                    {isSelected && <Check className="h-4 w-4 text-primary" />}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="h-full min-h-32 flex items-center justify-center text-sm text-muted-foreground">
+                                    {t('modelSelectorEmpty')}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setShowFetchedModelsDialog(false)}
+                            >
+                                {t('modelSelectorCancel')}
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleConfirmFetchedModels}
+                                disabled={selectedFetchedModels.length === 0}
+                            >
+                                {t('modelSelectorConfirm', { count: selectedFetchedModels.length })}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 <div className="relative">
                     <Input

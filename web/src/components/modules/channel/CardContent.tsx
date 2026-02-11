@@ -457,6 +457,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                 onCancel={() => setIsEditing(false)}
                                 cancelText={t('actions.cancel')}
                                 idPrefix="channel"
+                                nestedDialogOwnerId={`channel-detail-${channel.id}`}
                             />
                         </TabsContent>
                     </TabsContents>

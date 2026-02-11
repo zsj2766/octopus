@@ -154,12 +154,16 @@ export type MorphingDialogContentProps = {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  closeOnOutsideClick?: boolean;
+  nestedDialogOwnerId?: string;
 };
 
 function MorphingDialogContent({
   children,
   className,
   style,
+  closeOnOutsideClick = true,
+  nestedDialogOwnerId,
 }: MorphingDialogContentProps) {
   const { setIsOpen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
   const containerRef = useRef<HTMLDivElement>(null!);
@@ -215,6 +219,9 @@ function MorphingDialogContent({
   useClickOutside(
     containerRef,
     () => {
+      if (!closeOnOutsideClick) {
+        return;
+      }
       if (isOpen) {
         setIsOpen(false);
       }
@@ -233,6 +240,18 @@ function MorphingDialogContent({
       }
       const openPopoverContent = document.querySelector('[data-slot="popover-content"]');
       if (openPopoverContent) {
+        return true;
+      }
+      if (!nestedDialogOwnerId) {
+        return false;
+      }
+      if (target?.closest(`[data-morphing-dialog-owner="${nestedDialogOwnerId}"]`)) {
+        return true;
+      }
+      const ownedDialogContent = document.querySelector(
+        `[data-slot="dialog-content"][data-morphing-dialog-owner="${nestedDialogOwnerId}"]`
+      );
+      if (ownedDialogContent) {
         return true;
       }
       return false;
