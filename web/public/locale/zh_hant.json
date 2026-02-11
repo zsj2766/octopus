@@ -410,7 +410,6 @@
     "channel": {
         "card": {
             "requestCount": "請求次數",
-            "totalCost": "總成本",
             "type": "類型",
             "model": "模型",
             "noModels": "暫無模型",

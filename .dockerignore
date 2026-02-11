@@ -1,0 +1,25 @@
+.git
+.github
+.vscode
+.idea
+
+# Local tools
+.ace-tool
+
+# Node / frontend caches and artifacts
+web/node_modules
+web/.next
+web/.turbo
+web/.pnpm-store
+web/.cache
+
+# Build artifacts generated on host
+build/*
+!build/docker/
+!build/docker/**
+
+# Static frontend export (already embedded into binary during host build)
+static/out
+
+# Misc
+**/*.log

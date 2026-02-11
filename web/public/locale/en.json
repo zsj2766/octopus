@@ -410,7 +410,6 @@
     "channel": {
         "card": {
             "requestCount": "Requests",
-            "totalCost": "Total Cost",
             "type": "Type",
             "model": "Models",
             "noModels": "No models",

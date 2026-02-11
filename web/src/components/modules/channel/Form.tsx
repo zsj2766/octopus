@@ -142,6 +142,18 @@ export function ChannelForm({
         onFormDataChange({ ...formData, model, custom_model });
     };
 
+    const safeT = (
+        key: Parameters<typeof t>[0],
+        fallback: string,
+        values?: Record<string, string | number>
+    ) => {
+        try {
+            return values ? t(key, values as never) : t(key);
+        } catch {
+            return fallback;
+        }
+    };
+
     const handleRefreshModels = () => {
         if (!formData.base_urls?.[0]?.url || !effectiveKey) return;
         fetchModel.mutate(
@@ -212,15 +224,9 @@ export function ChannelForm({
         ? fetchedModels.filter((model) => model.toLowerCase().includes(fetchedModelsSearch.trim().toLowerCase()))
         : fetchedModels;
 
-    const confirmWithCount = t('modelSelectorConfirm', { count: selectedFetchedModels.length });
-    const confirmWithoutCount = t('modelSelectorConfirmEmpty');
     const modelSelectorConfirmLabel = selectedFetchedModels.length > 0
-        ? (confirmWithCount === 'channel.form.modelSelectorConfirm'
-            ? `${t('modelAdd')} (${selectedFetchedModels.length})`
-            : confirmWithCount)
-        : (confirmWithoutCount === 'channel.form.modelSelectorConfirmEmpty'
-            ? t('modelAdd')
-            : confirmWithoutCount);
+        ? safeT('modelSelectorConfirm', `${t('modelAdd')} (${selectedFetchedModels.length})`, { count: selectedFetchedModels.length })
+        : safeT('modelSelectorConfirmEmpty', t('modelAdd'));
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();
@@ -632,7 +638,7 @@ export function ChannelForm({
                 </div>
             </div>
 
-            <Accordion type="single" collapsible className="w-full border rounded-xl bg-background">
+            <Accordion type="single" collapsible className="w-full border rounded-xl bg-card">
                 <AccordionItem value="advanced" className="border-none">
                     <AccordionTrigger className="text-sm font-medium text-card-foreground py-3 px-4 hover:no-underline hover:bg-muted/30 rounded-xl transition-colors">
                         {t('advanced')}
