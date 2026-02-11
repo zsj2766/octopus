@@ -5,7 +5,7 @@ import {
     MorphingDialogContainer,
     MorphingDialogContent,
 } from '@/components/ui/morphing-dialog';
-import { Copy, DollarSign, MessageSquare } from 'lucide-react';
+import { Copy, MessageSquare } from 'lucide-react';
 import { ChannelType, type Channel, useCreateChannel, useEnableChannel } from '@/api/endpoints/channel';
 import { type StatsMetricsFormatted } from '@/api/endpoints/stats';
 import { CardContent } from './CardContent';
@@ -155,7 +155,7 @@ export function Card({ channel, stats }: { channel: Channel; stats: StatsMetrics
         <>
             <MorphingDialog>
                 <MorphingDialogTrigger className="w-full">
-                    <article className="relative flex h-54 flex-col justify-between gap-3 rounded-3xl border border-border bg-card text-card-foreground p-4 custom-shadow transition-all duration-300 hover:scale-[1.02]">
+                    <article className="relative flex h-54 flex-col justify-between gap-2.5 rounded-3xl border border-border bg-card text-card-foreground p-4 custom-shadow transition-all duration-300 hover:scale-[1.02]">
                         <header className="relative flex items-center justify-between gap-2">
                             <Tooltip side="top" sideOffset={10} align="center">
                                 <TooltipTrigger asChild>
@@ -185,7 +185,7 @@ export function Card({ channel, stats }: { channel: Channel; stats: StatsMetrics
                             </div>
                         </header>
 
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-xs min-w-0">
                                 <span className="shrink-0 text-muted-foreground">{t('type')}:</span>
                                 <span className="truncate text-card-foreground">{typeLabelMap[channel.type]}</span>
@@ -208,30 +208,17 @@ export function Card({ channel, stats }: { channel: Channel; stats: StatsMetrics
                             </div>
                         </div>
 
-                        <dl className="relative grid grid-cols-1 gap-3">
-                            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/80 p-2">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                        <MessageSquare className="h-5 w-5" />
+                        <dl className="relative grid grid-cols-1 gap-2">
+                            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/80 px-2.5 py-2">
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                        <MessageSquare className="h-4 w-4" />
                                     </span>
-                                    <dt className="text-sm text-muted-foreground">{t('requestCount')}</dt>
+                                    <dt className="truncate text-sm text-muted-foreground">{t('requestCount')}</dt>
                                 </div>
-                                <dd className="text-base">
+                                <dd className="shrink-0 text-sm font-medium text-card-foreground">
                                     {stats.request_count.formatted.value}
                                     <span className="ml-1 text-xs text-muted-foreground">{stats.request_count.formatted.unit}</span>
-                                </dd>
-                            </div>
-
-                            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/80 p-2">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                        <DollarSign className="h-5 w-5" />
-                                    </span>
-                                    <dt className="text-sm text-muted-foreground">{t('totalCost')}</dt>
-                                </div>
-                                <dd className="text-base">
-                                    {stats.total_cost.formatted.value}
-                                    <span className="ml-1 text-xs text-muted-foreground">{stats.total_cost.formatted.unit}</span>
                                 </dd>
                             </div>
                         </dl>

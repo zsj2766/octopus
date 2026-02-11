@@ -1,9 +1,18 @@
 import { toast as sonnerToast } from 'sonner';
 import { CircleCheck, CircleX, AlertTriangle, Info, Loader2 } from 'lucide-react';
 
+type ToastPosition =
+    | 'top-left'
+    | 'top-center'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'bottom-right';
+
 type ToastOptions = {
     description?: string;
     duration?: number;
+    position?: ToastPosition;
 };
 
 const icons = {

@@ -151,7 +151,7 @@ export function ChannelForm({
                     if (data && data.length > 0) {
                         const nextAuto = Array.from(new Set([...autoModels, ...data].map((m) => m.trim()).filter(Boolean)));
                         updateModels(nextAuto, customModels);
-                        toast.success(t('modelRefreshSuccess'));
+                        toast.success(t('modelRefreshSuccess'), { duration: 2500, position: 'top-right' });
                     } else {
                         toast.warning(t('modelRefreshEmpty'));
                     }
@@ -176,7 +176,7 @@ export function ChannelForm({
                         setSelectedFetchedModels([]);
                         setFetchedModelsSearch('');
                         setShowFetchedModelsDialog(true);
-                        toast.success(t('modelRefreshSuccess'));
+                        toast.success(t('modelRefreshSuccess'), { duration: 2500, position: 'top-right' });
                     } else {
                         toast.warning(t('modelRefreshEmpty'));
                     }
@@ -211,6 +211,16 @@ export function ChannelForm({
     const filteredFetchedModels = fetchedModelsSearch.trim()
         ? fetchedModels.filter((model) => model.toLowerCase().includes(fetchedModelsSearch.trim().toLowerCase()))
         : fetchedModels;
+
+    const confirmWithCount = t('modelSelectorConfirm', { count: selectedFetchedModels.length });
+    const confirmWithoutCount = t('modelSelectorConfirmEmpty');
+    const modelSelectorConfirmLabel = selectedFetchedModels.length > 0
+        ? (confirmWithCount === 'channel.form.modelSelectorConfirm'
+            ? `${t('modelAdd')} (${selectedFetchedModels.length})`
+            : confirmWithCount)
+        : (confirmWithoutCount === 'channel.form.modelSelectorConfirmEmpty'
+            ? t('modelAdd')
+            : confirmWithoutCount);
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();
@@ -535,7 +545,7 @@ export function ChannelForm({
                                 onClick={handleConfirmFetchedModels}
                                 disabled={selectedFetchedModels.length === 0}
                             >
-                                {t('modelSelectorConfirm', { count: selectedFetchedModels.length })}
+                                {modelSelectorConfirmLabel}
                             </Button>
                         </div>
                     </DialogContent>
@@ -622,7 +632,7 @@ export function ChannelForm({
                 </div>
             </div>
 
-            <Accordion type="single" collapsible className="w-full border rounded-xl bg-card">
+            <Accordion type="single" collapsible className="w-full border rounded-xl bg-background">
                 <AccordionItem value="advanced" className="border-none">
                     <AccordionTrigger className="text-sm font-medium text-card-foreground py-3 px-4 hover:no-underline hover:bg-muted/30 rounded-xl transition-colors">
                         {t('advanced')}

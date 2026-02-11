@@ -497,6 +497,7 @@
             "modelSelectorEmpty": "未找到可顯示模型",
             "modelSelectorCancel": "取消",
             "modelSelectorConfirm": "新增勾選項（{count}）",
+            "modelSelectorConfirmEmpty": "新增勾選項",
             "typeOpenAIChat": "OpenAI Chat",
             "typeOpenAIResponse": "OpenAI Response",
             "typeOpenAIEmbedding": "OpenAI Embedding",

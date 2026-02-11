@@ -497,6 +497,7 @@
             "modelSelectorEmpty": "No models found",
             "modelSelectorCancel": "Cancel",
             "modelSelectorConfirm": "Add Selected ({count})",
+            "modelSelectorConfirmEmpty": "Add Selected",
             "typeOpenAIChat": "OpenAI Chat",
             "typeOpenAIResponse": "OpenAI Response",
             "typeOpenAIEmbedding": "OpenAI Embedding",
