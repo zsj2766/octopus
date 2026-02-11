@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useChannelList } from '@/api/endpoints/channel';
+import { ChannelType, useChannelList } from '@/api/endpoints/channel';
 import { Card } from './Card';
 import { usePaginationStore, useSearchStore } from '@/components/modules/toolbar';
 import { EASING } from '@/lib/animations/fluid-transitions';
@@ -20,6 +20,7 @@ export function Channel() {
         columns: { default: 1, md: 2, lg: 3, xl: 4 },
     });
     const searchTerm = useSearchStore((s) => s.getSearchTerm(pageKey));
+    const channelTypeFilter = useSearchStore((s) => s.getChannelTypeFilter(pageKey));
     const page = usePaginationStore((s) => s.getPage(pageKey));
     const setPage = usePaginationStore((s) => s.setPage);
     const setTotalItems = usePaginationStore((s) => s.setTotalItems);
@@ -29,10 +30,14 @@ export function Channel() {
     const filteredChannels = useMemo(() => {
         if (!channelsData) return [];
         const sorted = [...channelsData].sort((a, b) => a.raw.id - b.raw.id);
-        if (!searchTerm.trim()) return sorted;
+        const withTypeFilter = channelTypeFilter === 'all'
+            ? sorted
+            : sorted.filter((c) => c.raw.type === Number(channelTypeFilter) as ChannelType);
+
+        if (!searchTerm.trim()) return withTypeFilter;
         const term = searchTerm.toLowerCase();
-        return sorted.filter((c) => c.raw.name.toLowerCase().includes(term));
-    }, [channelsData, searchTerm]);
+        return withTypeFilter.filter((c) => c.raw.name.toLowerCase().includes(term));
+    }, [channelsData, channelTypeFilter, searchTerm]);
 
     // Sync to store for Toolbar to display pagination info
     useEffect(() => {
@@ -40,10 +45,10 @@ export function Channel() {
         setPageSize(pageKey, pageSize);
     }, [filteredChannels.length, pageSize, pageKey, setTotalItems, setPageSize]);
 
-    // Reset to page 1 when search term changes
+    // Reset to page 1 when filters change
     useEffect(() => {
         setPage(pageKey, 1);
-    }, [searchTerm, pageKey, setPage]);
+    }, [searchTerm, channelTypeFilter, pageKey, setPage]);
 
     const pagedChannels = useMemo(() => {
         const start = (page - 1) * pageSize;

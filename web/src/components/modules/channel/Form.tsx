@@ -142,18 +142,6 @@ export function ChannelForm({
         onFormDataChange({ ...formData, model, custom_model });
     };
 
-    const safeT = (
-        key: Parameters<typeof t>[0],
-        fallback: string,
-        values?: Record<string, string | number>
-    ) => {
-        try {
-            return values ? t(key, values as never) : t(key);
-        } catch {
-            return fallback;
-        }
-    };
-
     const handleRefreshModels = () => {
         if (!formData.base_urls?.[0]?.url || !effectiveKey) return;
         fetchModel.mutate(
@@ -225,8 +213,8 @@ export function ChannelForm({
         : fetchedModels;
 
     const modelSelectorConfirmLabel = selectedFetchedModels.length > 0
-        ? safeT('modelSelectorConfirm', `${t('modelAdd')} (${selectedFetchedModels.length})`, { count: selectedFetchedModels.length })
-        : safeT('modelSelectorConfirmEmpty', t('modelAdd'));
+        ? t('modelSelectorConfirm', { count: selectedFetchedModels.length })
+        : t('modelSelectorConfirmEmpty');
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();

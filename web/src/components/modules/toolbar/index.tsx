@@ -1,8 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { ChannelType } from '@/api/endpoints/channel';
 import {
     MorphingDialog,
     MorphingDialogTrigger,
@@ -19,6 +28,16 @@ import { usePaginationStore } from './pagination-store';
 
 const TOOLBAR_PAGES: NavItem[] = ['channel', 'group', 'model'];
 
+const CHANNEL_TYPE_FILTER_OPTIONS = [
+    { value: 'all', key: 'channel.filter.type.all' },
+    { value: String(ChannelType.OpenAIChat), key: 'channel.form.typeOpenAIChat' },
+    { value: String(ChannelType.OpenAIResponse), key: 'channel.form.typeOpenAIResponse' },
+    { value: String(ChannelType.OpenAIEmbedding), key: 'channel.form.typeOpenAIEmbedding' },
+    { value: String(ChannelType.Anthropic), key: 'channel.form.typeAnthropic' },
+    { value: String(ChannelType.Gemini), key: 'channel.form.typeGemini' },
+    { value: String(ChannelType.Volcengine), key: 'channel.form.typeVolcengine' },
+] as const;
+
 function CreateDialogContent({ activeItem }: { activeItem: NavItem }) {
     switch (activeItem) {
         case 'channel':
@@ -34,8 +53,11 @@ function CreateDialogContent({ activeItem }: { activeItem: NavItem }) {
 
 export function Toolbar() {
     const { activeItem } = useNavStore();
-    const searchTerm = useSearchStore((s) => s.searchTerms[activeItem] || '');
+    const t = useTranslations();
+    const searchTerm = useSearchStore((s) => s.getSearchTerm(activeItem));
     const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
+    const channelTypeFilter = useSearchStore((s) => s.getChannelTypeFilter(activeItem));
+    const setChannelTypeFilter = useSearchStore((s) => s.setChannelTypeFilter);
     const page = usePaginationStore((s) => s.getPage(activeItem));
     const totalPages = usePaginationStore((s) => s.getTotalPages(activeItem));
     const prevPage = usePaginationStore((s) => s.prevPage);
@@ -47,9 +69,10 @@ export function Toolbar() {
         queueMicrotask(() => {
             setSearchExpanded(false);
             setSearchTerm(activeItem, '');
+            setChannelTypeFilter(activeItem, 'all');
             setPage(activeItem, 1);
         });
-    }, [activeItem, setSearchTerm, setPage]);
+    }, [activeItem, setSearchTerm, setChannelTypeFilter, setPage]);
 
     const showToolbar = TOOLBAR_PAGES.includes(activeItem);
 
@@ -64,6 +87,24 @@ export function Toolbar() {
                     transition={{ duration: 0.2 }}
                     className="flex items-center gap-2"
                 >
+                    {activeItem === 'channel' && (
+                        <Select
+                            value={channelTypeFilter}
+                            onValueChange={(value) => setChannelTypeFilter(activeItem, value)}
+                        >
+                            <SelectTrigger className="h-9 w-36 rounded-xl border text-sm">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl">
+                                {CHANNEL_TYPE_FILTER_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value} className="rounded-lg">
+                                        {t(option.key)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+
                     {/* 搜索按钮/展开框 */}
                     <div className="relative h-9 w-9">
                         {!searchExpanded ? (

@@ -408,6 +408,11 @@
         }
     },
     "channel": {
+        "filter": {
+            "type": {
+                "all": "All Types"
+            }
+        },
         "card": {
             "requestCount": "Requests",
             "type": "Type",

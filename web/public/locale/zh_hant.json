@@ -408,6 +408,11 @@
         }
     },
     "channel": {
+        "filter": {
+            "type": {
+                "all": "全部類型"
+            }
+        },
         "card": {
             "requestCount": "請求次數",
             "type": "類型",

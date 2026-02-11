@@ -408,6 +408,11 @@
         }
     },
     "channel": {
+        "filter": {
+            "type": {
+                "all": "全部类型"
+            }
+        },
         "card": {
             "requestCount": "请求次数",
             "type": "类型",
