@@ -18,7 +18,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/common/Toast';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, RefreshCw, Search, X, Plus } from 'lucide-react';
 
@@ -82,6 +82,7 @@ export function ChannelForm({
     nestedDialogOwnerId,
 }: ChannelFormProps) {
     const t = useTranslations('channel.form');
+    const locale = useLocale();
 
     // Ensure the form always shows at least 1 row for base_urls / keys / custom_header.
     // This avoids "empty list" UI and also keeps URL + APIKEY layout consistent.
@@ -142,14 +143,42 @@ export function ChannelForm({
         onFormDataChange({ ...formData, model, custom_model });
     };
 
+    const normalizeFetchedModelIds = (payload: unknown): string[] => {
+        const normalizeModelItem = (item: unknown) => {
+            if (typeof item === 'string') return item.trim();
+            if (item && typeof item === 'object' && 'id' in item) {
+                const id = (item as { id?: unknown }).id;
+                return typeof id === 'string' ? id.trim() : '';
+            }
+            return '';
+        };
+
+        if (Array.isArray(payload)) {
+            return Array.from(new Set(payload
+                .map(normalizeModelItem)
+                .filter(Boolean)));
+        }
+
+        if (payload && typeof payload === 'object' && 'data' in payload) {
+            const list = (payload as { data?: unknown }).data;
+            if (!Array.isArray(list)) return [];
+            return Array.from(new Set(list
+                .map(normalizeModelItem)
+                .filter(Boolean)));
+        }
+
+        return [];
+    };
+
     const handleRefreshModels = () => {
         if (!formData.base_urls?.[0]?.url || !effectiveKey) return;
         fetchModel.mutate(
             fetchModelPayload,
             {
                 onSuccess: (data) => {
-                    if (data && data.length > 0) {
-                        const nextAuto = Array.from(new Set([...autoModels, ...data].map((m) => m.trim()).filter(Boolean)));
+                    const fetchedModelIds = normalizeFetchedModelIds(data);
+                    if (fetchedModelIds.length > 0) {
+                        const nextAuto = Array.from(new Set([...autoModels, ...fetchedModelIds].map((m) => m.trim()).filter(Boolean)));
                         updateModels(nextAuto, customModels);
                         toast.success(t('modelRefreshSuccess'), { duration: 2500, position: 'top-right' });
                     } else {
@@ -170,9 +199,9 @@ export function ChannelForm({
             fetchModelPayload,
             {
                 onSuccess: (data) => {
-                    if (data && data.length > 0) {
-                        const normalized = Array.from(new Set(data.map((m) => m.trim()).filter(Boolean)));
-                        setFetchedModels(normalized);
+                    const fetchedModelIds = normalizeFetchedModelIds(data);
+                    if (fetchedModelIds.length > 0) {
+                        setFetchedModels(fetchedModelIds);
                         setSelectedFetchedModels([]);
                         setFetchedModelsSearch('');
                         setShowFetchedModelsDialog(true);
@@ -212,9 +241,47 @@ export function ChannelForm({
         ? fetchedModels.filter((model) => model.toLowerCase().includes(fetchedModelsSearch.trim().toLowerCase()))
         : fetchedModels;
 
+    const isTranslationKey = (value: string, key: string) => (
+        value === key || value === `channel.form.${key}`
+    );
+
+    const modelSelectorConfirmTranslated = t('modelSelectorConfirm', { count: selectedFetchedModels.length });
+    const modelSelectorConfirmEmptyTranslated = t('modelSelectorConfirmEmpty');
+    const modelAddTranslated = t('modelAdd');
+
     const modelSelectorConfirmLabel = selectedFetchedModels.length > 0
-        ? t('modelSelectorConfirm', { count: selectedFetchedModels.length })
-        : t('modelSelectorConfirmEmpty');
+        ? (!isTranslationKey(modelSelectorConfirmTranslated, 'modelSelectorConfirm')
+            ? modelSelectorConfirmTranslated
+            : !isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty')
+                ? `${modelSelectorConfirmEmptyTranslated} (${selectedFetchedModels.length})`
+                : modelAddTranslated)
+        : (!isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty')
+            ? modelSelectorConfirmEmptyTranslated
+            : modelAddTranslated);
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'development') return;
+        if (!showFetchedModelsDialog) return;
+        const payload = {
+            locale,
+            selectedCount: selectedFetchedModels.length,
+            modelSelectorConfirmTranslated,
+            modelSelectorConfirmEmptyTranslated,
+            modelAddTranslated,
+            modelSelectorConfirmLabel,
+            isConfirmKeyFallback: isTranslationKey(modelSelectorConfirmTranslated, 'modelSelectorConfirm'),
+            isConfirmEmptyKeyFallback: isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty'),
+        };
+        console.debug('[channel-model-selector-i18n]', payload);
+    }, [
+        locale,
+        showFetchedModelsDialog,
+        selectedFetchedModels.length,
+        modelSelectorConfirmTranslated,
+        modelSelectorConfirmEmptyTranslated,
+        modelAddTranslated,
+        modelSelectorConfirmLabel,
+    ]);
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();

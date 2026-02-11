@@ -128,6 +128,12 @@ export type FetchModelRequest = {
     custom_header?: CustomHeader[];
 };
 
+export type FetchModelResponse =
+    | string[]
+    | {
+        data?: Array<{ id?: string | null } | string>;
+    };
+
 /**
  * 获取渠道列表 Hook
  * 
@@ -309,7 +315,7 @@ export function useEnableChannel() {
 export function useFetchModel() {
     return useMutation({
         mutationFn: async (data: FetchModelRequest) => {
-            return apiClient.post<string[]>('/api/v1/channel/fetch-model', data);
+            return apiClient.post<FetchModelResponse>('/api/v1/channel/fetch-model', data);
         },
         onSuccess: (data) => {
             logger.log('模型列表获取成功:', data);

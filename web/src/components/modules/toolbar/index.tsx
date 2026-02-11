@@ -88,25 +88,27 @@ export function Toolbar() {
                     className="flex items-center gap-2"
                 >
                     {activeItem === 'channel' && (
-                        <Select
-                            value={channelTypeFilter}
-                            onValueChange={(value) => setChannelTypeFilter(activeItem, value)}
-                        >
-                            <SelectTrigger className="h-9 w-36 rounded-xl border text-sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                                {CHANNEL_TYPE_FILTER_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value} className="rounded-lg">
-                                        {t(option.key)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="relative z-20">
+                            <Select
+                                value={channelTypeFilter}
+                                onValueChange={(value) => setChannelTypeFilter(activeItem, value)}
+                            >
+                                <SelectTrigger className="h-9 w-36 rounded-xl border text-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                    {CHANNEL_TYPE_FILTER_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value} className="rounded-lg">
+                                            {t(option.key)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     )}
 
                     {/* 搜索按钮/展开框 */}
-                    <div className="relative h-9 w-9">
+                    <div className="relative h-9 w-9 z-10">
                         {!searchExpanded ? (
                             <motion.button
                                 layoutId="search-box"
