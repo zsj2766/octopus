@@ -260,7 +260,6 @@ export function ChannelForm({
             : modelAddTranslated);
 
     useEffect(() => {
-        if (process.env.NODE_ENV !== 'development') return;
         if (!showFetchedModelsDialog) return;
         const payload = {
             locale,
@@ -272,7 +271,7 @@ export function ChannelForm({
             isConfirmKeyFallback: isTranslationKey(modelSelectorConfirmTranslated, 'modelSelectorConfirm'),
             isConfirmEmptyKeyFallback: isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty'),
         };
-        console.debug('[channel-model-selector-i18n]', payload);
+        console.log('[channel-model-selector-i18n]', payload);
     }, [
         locale,
         showFetchedModelsDialog,

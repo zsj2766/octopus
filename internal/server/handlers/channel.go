@@ -14,6 +14,7 @@ import (
 	"github.com/bestruirui/octopus/internal/server/resp"
 	"github.com/bestruirui/octopus/internal/server/router"
 	"github.com/bestruirui/octopus/internal/task"
+	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -151,11 +152,13 @@ func deleteChannel(c *gin.Context) {
 func fetchModel(c *gin.Context) {
 	var request model.Channel
 	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Errorf("fetch model bind json failed, err=%v", err)
 		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidJSON)
 		return
 	}
 	models, err := helper.FetchModels(c.Request.Context(), request)
 	if err != nil {
+		log.Errorf("fetch model failed, channel=%s, type=%d, err=%v", request.Name, request.Type, err)
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
