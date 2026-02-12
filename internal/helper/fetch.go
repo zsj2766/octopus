@@ -15,6 +15,14 @@ import (
 	"github.com/dlclark/regexp2"
 )
 
+func buildUpstreamStatusError(prefix string, statusCode int, bodyPreview []byte) error {
+	body := strings.Join(strings.Fields(strings.TrimSpace(string(bodyPreview))), " ")
+	if body == "" {
+		return fmt.Errorf("%s failed: status %d, empty response body", prefix, statusCode)
+	}
+	return fmt.Errorf("%s failed: status %d, body: %s", prefix, statusCode, body)
+}
+
 func FetchModels(ctx context.Context, request model.Channel) ([]string, error) {
 	client, err := ChannelHttpClient(&request)
 	if err != nil {
@@ -101,10 +109,10 @@ func fetchOpenAIModels(client *http.Client, ctx context.Context, request model.C
 		bodyPreview, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if readErr != nil {
 			log.Errorf("fetch openai models failed, channel=%s, base_url=%s, status=%d, body_read_err=%v", request.Name, baseURL, resp.StatusCode, readErr)
-		} else {
-			log.Errorf("fetch openai models failed, channel=%s, base_url=%s, status=%d, body=%s", request.Name, baseURL, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+			return nil, fmt.Errorf("fetch openai models failed: status %d (failed to read upstream error body: %w)", resp.StatusCode, readErr)
 		}
-		return nil, fmt.Errorf("fetch openai models failed: status %d", resp.StatusCode)
+		log.Errorf("fetch openai models failed, channel=%s, base_url=%s, status=%d, body=%s", request.Name, baseURL, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+		return nil, buildUpstreamStatusError("fetch openai models", resp.StatusCode, bodyPreview)
 	}
 
 	var result model.OpenAIModelList
@@ -185,10 +193,10 @@ func fetchGeminiModels(client *http.Client, ctx context.Context, request model.C
 			resp.Body.Close()
 			if readErr != nil {
 				log.Errorf("fetch gemini models failed, channel=%s, base_url=%s, page_token=%s, status=%d, body_read_err=%v", request.Name, baseURL, pageToken, resp.StatusCode, readErr)
-			} else {
-				log.Errorf("fetch gemini models failed, channel=%s, base_url=%s, page_token=%s, status=%d, body=%s", request.Name, baseURL, pageToken, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+				return nil, fmt.Errorf("fetch gemini models failed: status %d (failed to read upstream error body: %w)", resp.StatusCode, readErr)
 			}
-			return nil, fmt.Errorf("fetch gemini models failed: status %d", resp.StatusCode)
+			log.Errorf("fetch gemini models failed, channel=%s, base_url=%s, page_token=%s, status=%d, body=%s", request.Name, baseURL, pageToken, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+			return nil, buildUpstreamStatusError("fetch gemini models", resp.StatusCode, bodyPreview)
 		}
 
 		var result model.GeminiModelList
@@ -268,10 +276,10 @@ func fetchAnthropicModels(client *http.Client, ctx context.Context, request mode
 			resp.Body.Close()
 			if readErr != nil {
 				log.Errorf("fetch anthropic models failed, channel=%s, base_url=%s, after_id=%s, status=%d, body_read_err=%v", request.Name, baseURL, afterID, resp.StatusCode, readErr)
-			} else {
-				log.Errorf("fetch anthropic models failed, channel=%s, base_url=%s, after_id=%s, status=%d, body=%s", request.Name, baseURL, afterID, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+				return nil, fmt.Errorf("fetch anthropic models failed: status %d (failed to read upstream error body: %w)", resp.StatusCode, readErr)
 			}
-			return nil, fmt.Errorf("fetch anthropic models failed: status %d", resp.StatusCode)
+			log.Errorf("fetch anthropic models failed, channel=%s, base_url=%s, after_id=%s, status=%d, body=%s", request.Name, baseURL, afterID, resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+			return nil, buildUpstreamStatusError("fetch anthropic models", resp.StatusCode, bodyPreview)
 		}
 
 		var result model.AnthropicModelList

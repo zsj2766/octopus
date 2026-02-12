@@ -6,18 +6,24 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"golang.org/x/net/proxy"
 )
 
+const customProxyClientMaxEntries = 64
+
 var (
-	systemDirectClient *http.Client
-	systemProxyClient  *http.Client
-	systemProxyURL     string
-	clientLock         sync.RWMutex
+	systemDirectClient   *http.Client
+	systemProxyClient    *http.Client
+	systemProxyURL       string
+	customProxyClients   = make(map[string]*http.Client)
+	customProxyClientSeq []string
+	clientLock           sync.RWMutex
 )
 
 // GetHTTPClientSystemProxy returns a cached http.Client.
@@ -78,13 +84,47 @@ func GetHTTPClientSystemProxy(useProxy bool) (*http.Client, error) {
 	return systemDirectClient, nil
 }
 
-// GetHTTPClientCustomProxy returns a NEW http.Client every time (no reuse).
+// GetHTTPClientCustomProxy returns a cached http.Client by proxy URL.
 // proxyURL supports: http, https, socks, socks5
 func GetHTTPClientCustomProxy(proxyURL string) (*http.Client, error) {
+	proxyURL = strings.TrimSpace(proxyURL)
 	if proxyURL == "" {
 		return nil, fmt.Errorf("proxy url is empty")
 	}
-	return newHTTPClientCustomProxy(proxyURL)
+
+	clientLock.RLock()
+	if client, ok := customProxyClients[proxyURL]; ok {
+		clientLock.RUnlock()
+		return client, nil
+	}
+	clientLock.RUnlock()
+
+	clientLock.Lock()
+	defer clientLock.Unlock()
+
+	if client, ok := customProxyClients[proxyURL]; ok {
+		return client, nil
+	}
+
+	client, err := newHTTPClientCustomProxy(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(customProxyClientSeq) >= customProxyClientMaxEntries {
+		evictedProxyURL := customProxyClientSeq[0]
+		customProxyClientSeq = customProxyClientSeq[1:]
+		if evictedClient, ok := customProxyClients[evictedProxyURL]; ok {
+			if transport, ok := evictedClient.Transport.(*http.Transport); ok {
+				transport.CloseIdleConnections()
+			}
+			delete(customProxyClients, evictedProxyURL)
+		}
+	}
+
+	customProxyClients[proxyURL] = client
+	customProxyClientSeq = append(customProxyClientSeq, proxyURL)
+	return client, nil
 }
 
 func clonedDefaultTransport() (*http.Transport, error) {
@@ -110,16 +150,29 @@ func newHTTPClientCustomProxy(proxyURLStr string) (*http.Client, error) {
 		return nil, err
 	}
 
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	cloned.DialContext = dialer.DialContext
+	cloned.TLSHandshakeTimeout = 10 * time.Second
+	cloned.ResponseHeaderTimeout = 30 * time.Second
+	cloned.IdleConnTimeout = 90 * time.Second
+	cloned.MaxIdleConns = 200
+	cloned.MaxIdleConnsPerHost = 50
+	cloned.ExpectContinueTimeout = 1 * time.Second
+
 	proxyURL, err := url.Parse(proxyURLStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid proxy url: %w", err)
 	}
 
-	switch proxyURL.Scheme {
+	scheme := strings.ToLower(proxyURL.Scheme)
+	switch scheme {
 	case "http", "https":
 		cloned.Proxy = http.ProxyURL(proxyURL)
 	case "socks", "socks5":
-		socksDialer, err := proxy.FromURL(proxyURL, proxy.Direct)
+		socksDialer, err := proxy.FromURL(proxyURL, dialer)
 		if err != nil {
 			return nil, fmt.Errorf("invalid socks proxy: %w", err)
 		}
