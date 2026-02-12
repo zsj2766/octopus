@@ -29,7 +29,11 @@ func static(urlPrefix string, fileSystem http.FileSystem) gin.HandlerFunc {
 			return
 		}
 		if _, err := fileSystem.Open(c.Request.URL.Path); err == nil {
-			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			if strings.HasPrefix(c.Request.URL.Path, "/_next/static/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				c.Header("Cache-Control", "no-cache")
+			}
 			fileserver.ServeHTTP(c.Writer, c.Request)
 			c.Abort()
 		}
