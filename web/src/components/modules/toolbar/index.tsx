@@ -40,7 +40,6 @@ const CHANNEL_TYPE_FILTER_OPTIONS = [
 
 const SEARCH_TRIGGER_WIDTH = 36;
 const SEARCH_EXPANDED_WIDTH = 168;
-const SEARCH_SHIFT_OFFSET = SEARCH_EXPANDED_WIDTH - SEARCH_TRIGGER_WIDTH;
 
 function CreateDialogContent({ activeItem }: { activeItem: NavItem }) {
     switch (activeItem) {
@@ -92,11 +91,7 @@ export function Toolbar() {
                     className="flex items-center gap-2"
                 >
                     {activeItem === 'channel' && (
-                        <motion.div
-                            className="relative z-20"
-                            animate={{ x: searchExpanded ? -SEARCH_SHIFT_OFFSET : 0 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                        >
+                        <div className="relative z-20">
                             <Select
                                 value={channelTypeFilter}
                                 onValueChange={(value) => setChannelTypeFilter(activeItem, value)}
@@ -112,7 +107,7 @@ export function Toolbar() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </motion.div>
+                        </div>
                     )}
 
                     {/* 搜索按钮/展开框 */}
