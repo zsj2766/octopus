@@ -120,10 +120,12 @@ export type UpdateChannelRequest = {
 };
 
 export type FetchModelRequest = {
+    name?: string;
     type: ChannelType;
     base_urls: BaseUrl[];
     keys: Array<Pick<ChannelKey, 'enabled' | 'channel_key'>>;
     proxy?: boolean;
+    channel_proxy?: string | null;
     match_regex?: string | null;
     custom_header?: CustomHeader[];
 };

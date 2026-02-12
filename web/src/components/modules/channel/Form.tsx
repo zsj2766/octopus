@@ -119,19 +119,23 @@ export function ChannelForm({
         formData.keys.find((k) => k.enabled && k.channel_key.trim())?.channel_key.trim() || '';
 
     const fetchModelPayload = useMemo(() => ({
+        name: formData.name.trim(),
         type: formData.type,
         base_urls: formData.base_urls,
         keys: formData.keys
             .filter((k) => k.channel_key.trim())
             .map((k) => ({ enabled: k.enabled, channel_key: k.channel_key.trim() })),
         proxy: formData.proxy,
+        channel_proxy: formData.channel_proxy.trim() || null,
         match_regex: formData.match_regex.trim() || null,
         custom_header: formData.custom_header,
     }), [
+        formData.name,
         formData.type,
         formData.base_urls,
         formData.keys,
         formData.proxy,
+        formData.channel_proxy,
         formData.match_regex,
         formData.custom_header,
     ]);
@@ -186,8 +190,10 @@ export function ChannelForm({
                     }
                 },
                 onError: (error) => {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    toast.error(t('modelRefreshFailed'), { description: errorMessage });
+                    const errorMessage = (error && typeof error === 'object' && 'message' in error)
+                        ? String((error as { message?: unknown }).message ?? '')
+                        : String(error);
+                    toast.error(t('modelRefreshFailed'), { description: errorMessage || t('modelRefreshEmpty') });
                 },
             }
         );
@@ -211,8 +217,10 @@ export function ChannelForm({
                     }
                 },
                 onError: (error) => {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    toast.error(t('modelRefreshFailed'), { description: errorMessage });
+                    const errorMessage = (error && typeof error === 'object' && 'message' in error)
+                        ? String((error as { message?: unknown }).message ?? '')
+                        : String(error);
+                    toast.error(t('modelRefreshFailed'), { description: errorMessage || t('modelRefreshEmpty') });
                 },
             }
         );

@@ -3,6 +3,7 @@ package helper
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -20,11 +21,18 @@ func ChannelHttpClient(channel *model.Channel) (*http.Client, error) {
 	}
 	if !channel.Proxy {
 		return client.GetHTTPClientSystemProxy(false)
-	} else if channel.ChannelProxy == nil || strings.TrimSpace(*channel.ChannelProxy) == "" {
-		return client.GetHTTPClientSystemProxy(true)
-	} else {
-		return client.GetHTTPClientCustomProxy(strings.TrimSpace(*channel.ChannelProxy))
 	}
+	if channel.ChannelProxy == nil || strings.TrimSpace(*channel.ChannelProxy) == "" {
+		httpClient, err := client.GetHTTPClientSystemProxy(true)
+		if err != nil {
+			if err.Error() == "proxy url is empty" {
+				return nil, fmt.Errorf("proxy is enabled but no proxy url configured (set system proxy_url or channel_proxy)")
+			}
+			return nil, err
+		}
+		return httpClient, nil
+	}
+	return client.GetHTTPClientCustomProxy(strings.TrimSpace(*channel.ChannelProxy))
 }
 
 func ChannelBaseUrlDelayUpdate(channel *model.Channel, ctx context.Context) {
