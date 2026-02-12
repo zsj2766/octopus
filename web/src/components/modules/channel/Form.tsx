@@ -18,7 +18,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/common/Toast';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, RefreshCw, Search, X, Plus } from 'lucide-react';
 
@@ -82,7 +82,6 @@ export function ChannelForm({
     nestedDialogOwnerId,
 }: ChannelFormProps) {
     const t = useTranslations('channel.form');
-    const locale = useLocale();
 
     // Ensure the form always shows at least 1 row for base_urls / keys / custom_header.
     // This avoids "empty list" UI and also keeps URL + APIKEY layout consistent.
@@ -266,29 +265,6 @@ export function ChannelForm({
         : (!isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty')
             ? modelSelectorConfirmEmptyTranslated
             : modelAddTranslated);
-
-    useEffect(() => {
-        if (!showFetchedModelsDialog) return;
-        const payload = {
-            locale,
-            selectedCount: selectedFetchedModels.length,
-            modelSelectorConfirmTranslated,
-            modelSelectorConfirmEmptyTranslated,
-            modelAddTranslated,
-            modelSelectorConfirmLabel,
-            isConfirmKeyFallback: isTranslationKey(modelSelectorConfirmTranslated, 'modelSelectorConfirm'),
-            isConfirmEmptyKeyFallback: isTranslationKey(modelSelectorConfirmEmptyTranslated, 'modelSelectorConfirmEmpty'),
-        };
-        console.log('[channel-model-selector-i18n]', payload);
-    }, [
-        locale,
-        showFetchedModelsDialog,
-        selectedFetchedModels.length,
-        modelSelectorConfirmTranslated,
-        modelSelectorConfirmEmptyTranslated,
-        modelAddTranslated,
-        modelSelectorConfirmLabel,
-    ]);
 
     const handleAddModel = (model: string) => {
         const trimmedModel = model.trim();

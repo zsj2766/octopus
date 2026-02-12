@@ -156,14 +156,10 @@ func fetchModel(c *gin.Context) {
 		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidJSON)
 		return
 	}
-	channelProxy := ""
-	if request.ChannelProxy != nil {
-		channelProxy = strings.TrimSpace(*request.ChannelProxy)
-	}
-	log.Infof("fetch model request received, channel=%s, type=%d, proxy=%t, channel_proxy_set=%t, channel_proxy_len=%d, base_urls=%d, keys=%d", request.Name, request.Type, request.Proxy, channelProxy != "", len(channelProxy), len(request.BaseUrls), len(request.Keys))
+	channelProxySet := request.ChannelProxy != nil && strings.TrimSpace(*request.ChannelProxy) != ""
 	models, err := helper.FetchModels(c.Request.Context(), request)
 	if err != nil {
-		log.Errorf("fetch model failed, channel=%s, type=%d, err=%v", request.Name, request.Type, err)
+		log.Errorf("fetch model failed, channel=%s, type=%d, proxy=%t, channel_proxy_set=%t, base_urls=%d, keys=%d, err=%v", request.Name, request.Type, request.Proxy, channelProxySet, len(request.BaseUrls), len(request.Keys), err)
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}

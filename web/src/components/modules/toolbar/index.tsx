@@ -38,6 +38,10 @@ const CHANNEL_TYPE_FILTER_OPTIONS = [
     { value: String(ChannelType.Volcengine), key: 'channel.form.typeVolcengine' },
 ] as const;
 
+const SEARCH_TRIGGER_WIDTH = 36;
+const SEARCH_EXPANDED_WIDTH = 168;
+const SEARCH_SHIFT_OFFSET = SEARCH_EXPANDED_WIDTH - SEARCH_TRIGGER_WIDTH;
+
 function CreateDialogContent({ activeItem }: { activeItem: NavItem }) {
     switch (activeItem) {
         case 'channel':
@@ -88,7 +92,11 @@ export function Toolbar() {
                     className="flex items-center gap-2"
                 >
                     {activeItem === 'channel' && (
-                        <div className="relative z-20">
+                        <motion.div
+                            className="relative z-20"
+                            animate={{ x: searchExpanded ? -SEARCH_SHIFT_OFFSET : 0 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                        >
                             <Select
                                 value={channelTypeFilter}
                                 onValueChange={(value) => setChannelTypeFilter(activeItem, value)}
@@ -104,11 +112,14 @@ export function Toolbar() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </div>
+                        </motion.div>
                     )}
 
                     {/* 搜索按钮/展开框 */}
-                    <div className="relative h-9 w-9 z-10">
+                    <div
+                        className="relative h-9 z-10"
+                        style={{ width: searchExpanded ? SEARCH_EXPANDED_WIDTH : SEARCH_TRIGGER_WIDTH }}
+                    >
                         {!searchExpanded ? (
                             <motion.button
                                 layoutId="search-box"
@@ -120,7 +131,7 @@ export function Toolbar() {
                         ) : (
                             <motion.div
                                 layoutId="search-box"
-                                className="absolute right-0 top-0 flex items-center gap-2 h-9 px-3 rounded-xl border"
+                                className="absolute right-0 top-0 flex items-center gap-2 h-9 w-full px-3 rounded-xl border"
                                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                             >
                                 <motion.span layout="position"><Search className="size-4 text-muted-foreground shrink-0" /></motion.span>
@@ -129,7 +140,7 @@ export function Toolbar() {
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(activeItem, e.target.value)}
                                     autoFocus
-                                    className="w-20 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                                    className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                                 />
                                 <button
                                     onClick={() => {
