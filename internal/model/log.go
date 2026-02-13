@@ -3,6 +3,8 @@ package model
 // AttemptStatus 尝试状态
 type AttemptStatus string
 
+type DiffOperation string
+
 const (
 	AttemptSuccess      AttemptStatus = "success"       // 转发成功
 	AttemptFailed       AttemptStatus = "failed"        // 转发失败
@@ -10,17 +12,39 @@ const (
 	AttemptSkipped      AttemptStatus = "skipped"       // 其他原因跳过（禁用、无Key、类型不兼容等）
 )
 
+const (
+	DiffOperationAdd     DiffOperation = "add"
+	DiffOperationReplace DiffOperation = "replace"
+	DiffOperationRemove  DiffOperation = "remove"
+)
+
+type RequestDiffItem struct {
+	Path      string        `json:"path"`
+	Operation DiffOperation `json:"operation"`
+	Before    any           `json:"before,omitempty"`
+	After     any           `json:"after,omitempty"`
+}
+
+type HeaderDiffItem struct {
+	HeaderKey string        `json:"header_key"`
+	Operation DiffOperation `json:"operation"`
+	Before    []string      `json:"before,omitempty"`
+	After     []string      `json:"after,omitempty"`
+}
+
 // ChannelAttempt 记录单次渠道尝试的决策和结果
 type ChannelAttempt struct {
-	ChannelID    int           `json:"channel_id"`
-	ChannelKeyID int           `json:"channel_key_id,omitempty"`
-	ChannelName  string        `json:"channel_name"`
-	ModelName    string        `json:"model_name"`
-	AttemptNum   int           `json:"attempt_num"`
-	Status       AttemptStatus `json:"status"`
-	Duration     int           `json:"duration"`
-	Sticky       bool          `json:"sticky,omitempty"`
-	Msg          string        `json:"msg,omitempty"`
+	ChannelID    int               `json:"channel_id"`
+	ChannelKeyID int               `json:"channel_key_id,omitempty"`
+	ChannelName  string            `json:"channel_name"`
+	ModelName    string            `json:"model_name"`
+	AttemptNum   int               `json:"attempt_num"`
+	Status       AttemptStatus     `json:"status"`
+	Duration     int               `json:"duration"`
+	Sticky       bool              `json:"sticky,omitempty"`
+	Msg          string            `json:"msg,omitempty"`
+	RequestDiff  []RequestDiffItem `json:"request_diff,omitempty"`
+	HeaderDiff   []HeaderDiffItem  `json:"header_diff,omitempty"`
 }
 
 type RelayLog struct {

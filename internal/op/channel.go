@@ -3,6 +3,7 @@ package op
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/bestruirui/octopus/internal/db"
@@ -161,21 +162,63 @@ func ChannelUpdate(req *model.ChannelUpdateRequest, ctx context.Context) (*model
 		selectFields = append(selectFields, "auto_group")
 		updates.AutoGroup = *req.AutoGroup
 	}
-	if req.CustomHeader != nil {
+	if req.CustomHeaderSet != nil && *req.CustomHeaderSet {
 		selectFields = append(selectFields, "custom_header")
-		updates.CustomHeader = *req.CustomHeader
+		if req.CustomHeader == nil {
+			updates.CustomHeader = []model.CustomHeader{}
+		} else {
+			normalizedHeaders := make([]model.CustomHeader, 0, len(*req.CustomHeader))
+			for _, header := range *req.CustomHeader {
+				headerKey := strings.TrimSpace(header.HeaderKey)
+				if headerKey == "" {
+					continue
+				}
+				normalizedHeaders = append(normalizedHeaders, model.CustomHeader{
+					HeaderKey:   headerKey,
+					HeaderValue: header.HeaderValue,
+				})
+			}
+			updates.CustomHeader = normalizedHeaders
+		}
 	}
-	if req.ChannelProxy != nil {
+	if req.ChannelProxySet != nil && *req.ChannelProxySet {
 		selectFields = append(selectFields, "channel_proxy")
-		updates.ChannelProxy = req.ChannelProxy
+		if req.ChannelProxy == nil {
+			updates.ChannelProxy = nil
+		} else {
+			normalizedChannelProxy := strings.TrimSpace(*req.ChannelProxy)
+			if normalizedChannelProxy == "" {
+				updates.ChannelProxy = nil
+			} else {
+				updates.ChannelProxy = &normalizedChannelProxy
+			}
+		}
 	}
-	if req.ParamOverride != nil {
+	if req.ParamOverrideSet != nil && *req.ParamOverrideSet {
 		selectFields = append(selectFields, "param_override")
-		updates.ParamOverride = req.ParamOverride
+		if req.ParamOverride == nil {
+			updates.ParamOverride = nil
+		} else {
+			normalizedParamOverride := strings.TrimSpace(*req.ParamOverride)
+			if normalizedParamOverride == "" {
+				updates.ParamOverride = nil
+			} else {
+				updates.ParamOverride = &normalizedParamOverride
+			}
+		}
 	}
-	if req.MatchRegex != nil {
+	if req.MatchRegexSet != nil && *req.MatchRegexSet {
 		selectFields = append(selectFields, "match_regex")
-		updates.MatchRegex = req.MatchRegex
+		if req.MatchRegex == nil {
+			updates.MatchRegex = nil
+		} else {
+			normalizedMatchRegex := strings.TrimSpace(*req.MatchRegex)
+			if normalizedMatchRegex == "" {
+				updates.MatchRegex = nil
+			} else {
+				updates.MatchRegex = &normalizedMatchRegex
+			}
+		}
 	}
 
 	// 只有当有字段需要更新时才执行 UPDATE

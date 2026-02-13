@@ -387,6 +387,34 @@
         "list": {
             "noMore": "沒有更多日誌了"
         },
+        "filter": {
+            "reset": "重設篩選",
+            "time": {
+                "all": "全部時間"
+            },
+            "status": {
+                "all": "全部狀態",
+                "success": "成功",
+                "failed": "失敗"
+            },
+            "channel": {
+                "all": "全部供應源"
+            },
+            "model": {
+                "all": "全部模型"
+            },
+            "retry": {
+                "all": "全部重試",
+                "yes": "有重試",
+                "no": "無重試"
+            },
+            "keyword": {
+                "placeholder": "關鍵字搜尋",
+                "apply": "套用",
+                "open": "開啟關鍵字篩選",
+                "clear": "清空關鍵字篩選"
+            }
+        },
         "card": {
             "error": "錯誤",
             "errorInfo": "錯誤訊息",
@@ -402,6 +430,13 @@
             "firstTokenTime": "首字時間",
             "tokens": "tokens",
             "retryDetails": "重試詳情",
+            "requestDiff": "請求體差異",
+            "headerDiff": "Header 差異",
+            "before": "變更前",
+            "after": "變更後",
+            "diffAdd": "新增",
+            "diffReplace": "修改",
+            "diffRemove": "刪除",
             "attempts": "次嘗試",
             "success": "成功",
             "failed": "失敗"
@@ -477,9 +512,17 @@
             "customHeaderKey": "Header Key",
             "customHeaderValue": "Header Value",
             "customHeaderAdd": "新增 Header",
+            "customHeaderHelpTitle": "自定義 Header 說明",
+            "customHeaderHelpDescription": "請求進入後、轉發上游前執行。支援新增/覆蓋，值留空表示刪除該 Header。",
+            "customHeaderHelpExampleAdd": "示例（新增/覆蓋）：X-Trace-Id / abc-123",
+            "customHeaderHelpExampleDelete": "示例（刪除）：Authorization / （留空）",
             "channelProxy": "供應源代理",
             "channelProxyPlaceholder": "可選：僅對該供應源生效（覆蓋全域代理）",
             "paramOverride": "參數覆蓋",
+            "paramOverrideHelpTitle": "參數覆蓋說明",
+            "paramOverrideHelpDescription": "使用 JSON 對請求體做覆蓋（JSON Merge Patch）。請求進入後、轉發上游前執行。",
+            "paramOverrideHelpExampleUpdate": "示例（修改）：{\"temperature\":0.2}",
+            "paramOverrideHelpExampleDelete": "示例（刪除欄位）：{\"stream\":null}",
             "paramOverridePlaceholder": "可選：JSON 字串，用於覆蓋請求參數",
             "model": "模型",
             "enabled": "啟用",

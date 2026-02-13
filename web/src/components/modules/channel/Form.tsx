@@ -18,9 +18,10 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/common/Toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, RefreshCw, Search, X, Plus } from 'lucide-react';
+import { Check, HelpCircle, RefreshCw, Search, X, Plus } from 'lucide-react';
 
 export interface ChannelKeyFormItem {
     id?: number;
@@ -127,7 +128,12 @@ export function ChannelForm({
         proxy: formData.proxy,
         channel_proxy: formData.channel_proxy.trim() || null,
         match_regex: formData.match_regex.trim() || null,
-        custom_header: formData.custom_header,
+        custom_header: (formData.custom_header ?? [])
+            .map((h) => ({
+                header_key: h.header_key.trim(),
+                header_value: h.header_value,
+            }))
+            .filter((h) => h.header_key),
     }), [
         formData.name,
         formData.type,
@@ -682,6 +688,7 @@ export function ChannelForm({
                         {t('advanced')}
                     </AccordionTrigger>
                     <AccordionContent className="pt-4 px-4 pb-4 space-y-4 border-t">
+                        <TooltipProvider>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label htmlFor={`${idPrefix}-auto-group`} className="text-sm font-medium text-card-foreground">
@@ -723,16 +730,32 @@ export function ChannelForm({
                                 <label className="text-sm font-medium text-card-foreground">
                                     {t('customHeader')} {formData.custom_header.length > 0 ? `(${formData.custom_header.length})` : ''}
                                 </label>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleAddHeader}
-                                    className="h-6 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent"
-                                >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    {t('customHeaderAdd')}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                                                aria-label={t('customHeaderHelpTitle')}
+                                            >
+                                                <HelpCircle className="h-4 w-4" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs whitespace-pre-line">
+                                            {`${t('customHeaderHelpTitle')}\n${t('customHeaderHelpDescription')}\n${t('customHeaderHelpExampleAdd')}\n${t('customHeaderHelpExampleDelete')}`}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleAddHeader}
+                                        className="h-6 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent"
+                                    >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        {t('customHeaderAdd')}
+                                    </Button>
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 {(formData.custom_header ?? []).map((h, idx) => (
@@ -782,9 +805,25 @@ export function ChannelForm({
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor={`${idPrefix}-param-override`} className="text-sm font-medium text-card-foreground">
-                                {t('paramOverride')}
-                            </label>
+                            <div className="flex items-center gap-2">
+                                <label htmlFor={`${idPrefix}-param-override`} className="text-sm font-medium text-card-foreground">
+                                    {t('paramOverride')}
+                                </label>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                                            aria-label={t('paramOverrideHelpTitle')}
+                                        >
+                                            <HelpCircle className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs whitespace-pre-line">
+                                        {`${t('paramOverrideHelpTitle')}\n${t('paramOverrideHelpDescription')}\n${t('paramOverrideHelpExampleUpdate')}\n${t('paramOverrideHelpExampleDelete')}`}
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
                             <textarea
                                 id={`${idPrefix}-param-override`}
                                 value={formData.param_override}
@@ -793,6 +832,7 @@ export function ChannelForm({
                                 className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                         </div>
+                        </TooltipProvider>
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>

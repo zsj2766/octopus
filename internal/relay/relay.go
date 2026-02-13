@@ -2,10 +2,13 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -160,8 +163,10 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 func (ra *relayAttempt) attempt() attemptResult {
 	span := ra.iter.StartAttempt(ra.channel.ID, ra.usedKey.ID, ra.channel.Name)
 
+	span.SetModelName(ra.internalRequest.Model)
+
 	// 转发请求
-	statusCode, fwdErr := ra.forward()
+	statusCode, fwdErr := ra.forward(span)
 
 	// 更新 channel key 状态
 	ra.usedKey.StatusCode = statusCode
@@ -182,7 +187,7 @@ func (ra *relayAttempt) attempt() attemptResult {
 		})
 
 		// 熔断器：记录成功
-		balancer.RecordSuccess(ra.channel.ID, ra.usedKey.ID, ra.internalRequest.Model)
+		balancer.RecordSuccess(ra.channel.ID, ra.usedKey.ID, ra.metrics.InternalRequest.Model)
 		// 会话保持：更新粘性记录
 		balancer.SetSticky(ra.apiKeyID, ra.requestModel, ra.channel.ID, ra.usedKey.ID)
 
@@ -200,7 +205,7 @@ func (ra *relayAttempt) attempt() attemptResult {
 	})
 
 	// 熔断器：记录失败
-	balancer.RecordFailure(ra.channel.ID, ra.usedKey.ID, ra.internalRequest.Model)
+	balancer.RecordFailure(ra.channel.ID, ra.usedKey.ID, ra.metrics.InternalRequest.Model)
 
 	written := ra.c.Writer.Written()
 	if written {
@@ -240,13 +245,23 @@ func parseRequest(inboundType inbound.InboundType, c *gin.Context) (*model.Inter
 }
 
 // forward 转发请求到上游服务
-func (ra *relayAttempt) forward() (int, error) {
+func (ra *relayAttempt) forward(span *balancer.AttemptSpan) (int, error) {
 	ctx := ra.c.Request.Context()
+
+	outboundInternalRequest, err := ra.buildOutboundInternalRequest()
+	if err != nil {
+		log.Warnf("failed to apply request override: %v", err)
+		return 0, fmt.Errorf("failed to apply request override: %w", err)
+	}
+	span.SetModelName(outboundInternalRequest.Model)
+	span.SetRequestDiff(buildRequestDiff(ra.internalRequest, outboundInternalRequest))
+	// 记录本次尝试实际发送的请求体
+	ra.metrics.InternalRequest = outboundInternalRequest
 
 	// 构建出站请求
 	outboundRequest, err := ra.outAdapter.TransformRequest(
 		ctx,
-		ra.internalRequest,
+		outboundInternalRequest,
 		ra.channel.GetBaseUrl(),
 		ra.usedKey.ChannelKey,
 	)
@@ -256,7 +271,7 @@ func (ra *relayAttempt) forward() (int, error) {
 	}
 
 	// 复制请求头
-	ra.copyHeaders(outboundRequest)
+	span.SetHeaderDiff(ra.copyHeaders(outboundRequest))
 
 	// 发送请求
 	response, err := ra.sendRequest(outboundRequest)
@@ -275,7 +290,7 @@ func (ra *relayAttempt) forward() (int, error) {
 	}
 
 	// 处理响应
-	if ra.internalRequest.Stream != nil && *ra.internalRequest.Stream {
+	if outboundInternalRequest.Stream != nil && *outboundInternalRequest.Stream {
 		if err := ra.handleStreamResponse(ctx, response); err != nil {
 			return 0, err
 		}
@@ -288,7 +303,7 @@ func (ra *relayAttempt) forward() (int, error) {
 }
 
 // copyHeaders 复制请求头，过滤 hop-by-hop 头
-func (ra *relayAttempt) copyHeaders(outboundRequest *http.Request) {
+func (ra *relayAttempt) copyHeaders(outboundRequest *http.Request) []dbmodel.HeaderDiffItem {
 	for key, values := range ra.c.Request.Header {
 		if hopByHopHeaders[strings.ToLower(key)] {
 			continue
@@ -297,11 +312,24 @@ func (ra *relayAttempt) copyHeaders(outboundRequest *http.Request) {
 			outboundRequest.Header.Set(key, value)
 		}
 	}
-	if len(ra.channel.CustomHeader) > 0 {
-		for _, header := range ra.channel.CustomHeader {
-			outboundRequest.Header.Set(header.HeaderKey, header.HeaderValue)
-		}
+
+	beforeCustom := cloneHeaderMap(outboundRequest.Header)
+	if len(ra.channel.CustomHeader) == 0 {
+		return nil
 	}
+
+	for _, header := range ra.channel.CustomHeader {
+		headerKey := strings.TrimSpace(header.HeaderKey)
+		if headerKey == "" {
+			continue
+		}
+		if header.HeaderValue == "" {
+			outboundRequest.Header.Del(headerKey)
+			continue
+		}
+		outboundRequest.Header.Set(headerKey, header.HeaderValue)
+	}
+	return buildHeaderDiff(beforeCustom, outboundRequest.Header)
 }
 
 // sendRequest 发送 HTTP 请求
@@ -454,5 +482,298 @@ func (ra *relayAttempt) collectResponse() {
 		return
 	}
 
-	ra.metrics.SetInternalResponse(internalResponse, ra.internalRequest.Model)
+	ra.metrics.SetInternalResponse(internalResponse, ra.metrics.InternalRequest.Model)
+}
+
+func (ra *relayAttempt) buildOutboundInternalRequest() (*model.InternalLLMRequest, error) {
+	base, err := deepCopyInternalRequest(ra.internalRequest)
+	if err != nil {
+		return nil, err
+	}
+	if ra.channel.ParamOverride == nil {
+		return base, nil
+	}
+
+	override := strings.TrimSpace(*ra.channel.ParamOverride)
+	if override == "" {
+		return base, nil
+	}
+
+	patched, err := applyJSONMergePatch(base, []byte(override))
+	if err != nil {
+		return nil, err
+	}
+	if err := patched.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid request after param override: %w", err)
+	}
+	return patched, nil
+}
+
+func deepCopyInternalRequest(in *model.InternalLLMRequest) (*model.InternalLLMRequest, error) {
+	if in == nil {
+		return nil, fmt.Errorf("internal request is nil")
+	}
+	b, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal internal request: %w", err)
+	}
+	var out model.InternalLLMRequest
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal internal request: %w", err)
+	}
+
+	out.RawRequest = in.RawRequest
+	out.RawAPIFormat = in.RawAPIFormat
+	out.TransformerMetadata = in.TransformerMetadata
+	out.TransformOptions = in.TransformOptions
+	out.Query = in.Query
+	out.Include = in.Include
+	if in.ExtraBody != nil {
+		out.ExtraBody = append([]byte(nil), in.ExtraBody...)
+	}
+	return &out, nil
+}
+
+func applyJSONMergePatch(base *model.InternalLLMRequest, patch []byte) (*model.InternalLLMRequest, error) {
+	baseBytes, err := json.Marshal(base)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal base request: %w", err)
+	}
+
+	if !json.Valid(patch) {
+		return nil, fmt.Errorf("param_override must be valid json")
+	}
+
+	var patchValue any
+	if err := json.Unmarshal(patch, &patchValue); err != nil {
+		return nil, fmt.Errorf("param_override must be a json object: %w", err)
+	}
+	patchObject, ok := patchValue.(map[string]any)
+	if !ok || patchObject == nil {
+		return nil, fmt.Errorf("param_override must be a json object")
+	}
+
+	var baseObject map[string]any
+	if err := json.Unmarshal(baseBytes, &baseObject); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal base request object: %w", err)
+	}
+
+	mergedObject := mergePatchObject(baseObject, patchObject)
+	merged, err := json.Marshal(mergedObject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged request: %w", err)
+	}
+
+	var out model.InternalLLMRequest
+	if err := json.Unmarshal(merged, &out); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal merged request: %w", err)
+	}
+
+	out.RawRequest = base.RawRequest
+	out.RawAPIFormat = base.RawAPIFormat
+	out.TransformerMetadata = base.TransformerMetadata
+	out.TransformOptions = base.TransformOptions
+	out.Query = base.Query
+	out.Include = base.Include
+	if base.ExtraBody != nil {
+		out.ExtraBody = append([]byte(nil), base.ExtraBody...)
+	}
+
+	return &out, nil
+}
+
+func mergePatchObject(base map[string]any, patch map[string]any) map[string]any {
+	if base == nil {
+		base = map[string]any{}
+	}
+	for key, patchValue := range patch {
+		if patchValue == nil {
+			delete(base, key)
+			continue
+		}
+
+		if patchMap, ok := patchValue.(map[string]any); ok {
+			if baseMap, ok := base[key].(map[string]any); ok {
+				base[key] = mergePatchObject(baseMap, patchMap)
+			} else {
+				base[key] = mergePatchObject(map[string]any{}, patchMap)
+			}
+			continue
+		}
+
+		base[key] = patchValue
+	}
+	return base
+}
+
+func buildRequestDiff(beforeReq, afterReq *model.InternalLLMRequest) []dbmodel.RequestDiffItem {
+	if beforeReq == nil || afterReq == nil {
+		return nil
+	}
+	beforeMap := internalRequestToMap(beforeReq)
+	afterMap := internalRequestToMap(afterReq)
+	if beforeMap == nil || afterMap == nil {
+		return nil
+	}
+	var diffs []dbmodel.RequestDiffItem
+	buildJSONDiff("", beforeMap, afterMap, &diffs)
+	return diffs
+}
+
+func internalRequestToMap(req *model.InternalLLMRequest) map[string]any {
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func buildJSONDiff(path string, before, after any, diffs *[]dbmodel.RequestDiffItem) {
+	if reflect.DeepEqual(before, after) {
+		return
+	}
+
+	beforeMap, beforeIsMap := before.(map[string]any)
+	afterMap, afterIsMap := after.(map[string]any)
+	if beforeIsMap && afterIsMap {
+		keySet := make(map[string]struct{}, len(beforeMap)+len(afterMap))
+		for k := range beforeMap {
+			keySet[k] = struct{}{}
+		}
+		for k := range afterMap {
+			keySet[k] = struct{}{}
+		}
+		keys := make([]string, 0, len(keySet))
+		for k := range keySet {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			nextPath := "/" + k
+			if path != "" {
+				nextPath = path + "/" + k
+			}
+			beforeValue, beforeOK := beforeMap[k]
+			afterValue, afterOK := afterMap[k]
+			switch {
+			case !beforeOK && afterOK:
+				*diffs = append(*diffs, dbmodel.RequestDiffItem{
+					Path:      nextPath,
+					Operation: dbmodel.DiffOperationAdd,
+					After:     cloneJSONLike(afterValue),
+				})
+			case beforeOK && !afterOK:
+				*diffs = append(*diffs, dbmodel.RequestDiffItem{
+					Path:      nextPath,
+					Operation: dbmodel.DiffOperationRemove,
+					Before:    cloneJSONLike(beforeValue),
+				})
+			default:
+				buildJSONDiff(nextPath, beforeValue, afterValue, diffs)
+			}
+		}
+		return
+	}
+
+	op := dbmodel.DiffOperationReplace
+	if before == nil && after != nil {
+		op = dbmodel.DiffOperationAdd
+	} else if before != nil && after == nil {
+		op = dbmodel.DiffOperationRemove
+	}
+	item := dbmodel.RequestDiffItem{
+		Path:      path,
+		Operation: op,
+	}
+	if op != dbmodel.DiffOperationAdd {
+		item.Before = cloneJSONLike(before)
+	}
+	if op != dbmodel.DiffOperationRemove {
+		item.After = cloneJSONLike(after)
+	}
+	*diffs = append(*diffs, item)
+}
+
+func cloneJSONLike(v any) any {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return v
+	}
+	return out
+}
+
+func cloneHeaderMap(header http.Header) map[string][]string {
+	out := make(map[string][]string, len(header))
+	for key, values := range header {
+		if len(values) == 0 {
+			out[key] = nil
+			continue
+		}
+		cloned := append([]string(nil), values...)
+		out[key] = cloned
+	}
+	return out
+}
+
+func buildHeaderDiff(before, after http.Header) []dbmodel.HeaderDiffItem {
+	if before == nil {
+		before = http.Header{}
+	}
+	if after == nil {
+		after = http.Header{}
+	}
+	keys := make(map[string]struct{}, len(before)+len(after))
+	for k := range before {
+		keys[k] = struct{}{}
+	}
+	for k := range after {
+		keys[k] = struct{}{}
+	}
+
+	diffs := make([]dbmodel.HeaderDiffItem, 0)
+	orderedKeys := make([]string, 0, len(keys))
+	for key := range keys {
+		orderedKeys = append(orderedKeys, key)
+	}
+	sort.Strings(orderedKeys)
+	for _, key := range orderedKeys {
+		beforeValues, beforeOK := before[key]
+		afterValues, afterOK := after[key]
+		switch {
+		case !beforeOK && afterOK:
+			diffs = append(diffs, dbmodel.HeaderDiffItem{
+				HeaderKey: key,
+				Operation: dbmodel.DiffOperationAdd,
+				After:     append([]string(nil), afterValues...),
+			})
+		case beforeOK && !afterOK:
+			diffs = append(diffs, dbmodel.HeaderDiffItem{
+				HeaderKey: key,
+				Operation: dbmodel.DiffOperationRemove,
+				Before:    append([]string(nil), beforeValues...),
+			})
+		default:
+			if reflect.DeepEqual(beforeValues, afterValues) {
+				continue
+			}
+			diffs = append(diffs, dbmodel.HeaderDiffItem{
+				HeaderKey: key,
+				Operation: dbmodel.DiffOperationReplace,
+				Before:    append([]string(nil), beforeValues...),
+				After:     append([]string(nil), afterValues...),
+			})
+		}
+	}
+	return diffs
 }

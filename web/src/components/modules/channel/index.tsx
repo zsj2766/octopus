@@ -36,7 +36,10 @@ export function Channel() {
 
         if (!searchTerm.trim()) return withTypeFilter;
         const term = searchTerm.toLowerCase();
-        return withTypeFilter.filter((c) => c.raw.name.toLowerCase().includes(term));
+        return withTypeFilter.filter((c) => {
+            if (c.raw.name.toLowerCase().includes(term)) return true;
+            return c.raw.base_urls.some((baseUrl) => baseUrl.url.toLowerCase().includes(term));
+        });
     }, [channelsData, channelTypeFilter, searchTerm]);
 
     // Sync to store for Toolbar to display pagination info

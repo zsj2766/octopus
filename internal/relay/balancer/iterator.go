@@ -127,7 +127,6 @@ func (it *Iterator) StartAttempt(channelID, channelKeyID int, channelName string
 			ChannelID:    channelID,
 			ChannelKeyID: channelKeyID,
 			ChannelName:  channelName,
-			ModelName:    it.candidates[it.index].ModelName,
 			AttemptNum:   it.count,
 			Sticky:       it.IsSticky(),
 		},
@@ -147,6 +146,27 @@ type AttemptSpan struct {
 	startTime time.Time
 	iter      *Iterator
 	ended     bool
+}
+
+func (s *AttemptSpan) SetModelName(modelName string) {
+	if s.ended {
+		return
+	}
+	s.attempt.ModelName = modelName
+}
+
+func (s *AttemptSpan) SetRequestDiff(diff []model.RequestDiffItem) {
+	if s.ended {
+		return
+	}
+	s.attempt.RequestDiff = diff
+}
+
+func (s *AttemptSpan) SetHeaderDiff(diff []model.HeaderDiffItem) {
+	if s.ended {
+		return
+	}
+	s.attempt.HeaderDiff = diff
 }
 
 // End 结束尝试：设置状态，自动计算耗时，追加到 Iterator

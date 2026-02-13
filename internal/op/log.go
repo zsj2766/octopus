@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,10 +12,22 @@ import (
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/bestruirui/octopus/internal/utils/snowflake"
+	"gorm.io/gorm"
 )
 
 const relayLogMaxSize = 20
 const relayLogMaxSizeNoDB = 100 // 当不保存到数据库时，允许更大的缓存用于实时查询
+
+type RelayLogListFilter struct {
+	StartTime         *int
+	EndTime           *int
+	Status            *string
+	ChannelID         *int
+	Model             *string
+	Keyword           *string
+	HasRetry          *bool
+	NormalizedKeyword string
+}
 
 var relayLogCache = make([]model.RelayLog, 0, relayLogMaxSize)
 var relayLogCacheLock sync.Mutex
@@ -186,30 +199,154 @@ func relayLogCleanup(ctx context.Context) error {
 	return db.GetDB().WithContext(ctx).Where("time < ?", cutoffTime).Delete(&model.RelayLog{}).Error
 }
 
-// RelayLogList 查询日志列表，支持可选的时间范围过滤
-// startTime 和 endTime 为 nil 时表示不限制时间范围
-func RelayLogList(ctx context.Context, startTime, endTime *int, page, pageSize int) ([]model.RelayLog, error) {
+func normalizeRelayLogListFilter(filter RelayLogListFilter) RelayLogListFilter {
+	normalized := filter
+	if normalized.StartTime != nil && normalized.EndTime != nil && *normalized.StartTime > *normalized.EndTime {
+		normalized.StartTime, normalized.EndTime = normalized.EndTime, normalized.StartTime
+	}
+	if normalized.Keyword != nil {
+		trimmed := strings.TrimSpace(*normalized.Keyword)
+		if trimmed == "" {
+			normalized.Keyword = nil
+		} else {
+			normalized.NormalizedKeyword = strings.ToLower(trimmed)
+			normalized.Keyword = &trimmed
+		}
+	}
+	if normalized.Model != nil {
+		trimmed := strings.TrimSpace(*normalized.Model)
+		if trimmed == "" {
+			normalized.Model = nil
+		} else {
+			normalized.Model = &trimmed
+		}
+	}
+	if normalized.Status != nil {
+		trimmed := strings.TrimSpace(*normalized.Status)
+		if trimmed == "" {
+			normalized.Status = nil
+		} else {
+			normalized.Status = &trimmed
+		}
+	}
+	return normalized
+}
+
+func filterRelayLog(logEntry model.RelayLog, filter RelayLogListFilter) bool {
+	if filter.StartTime != nil {
+		if logEntry.Time < int64(*filter.StartTime) {
+			return false
+		}
+	}
+	if filter.EndTime != nil {
+		if logEntry.Time > int64(*filter.EndTime) {
+			return false
+		}
+	}
+	if filter.Status != nil {
+		expectSuccess := *filter.Status == "success"
+		if expectSuccess {
+			if logEntry.Error != "" {
+				return false
+			}
+		} else if logEntry.Error == "" {
+			return false
+		}
+	}
+	if filter.ChannelID != nil {
+		if logEntry.ChannelId != *filter.ChannelID {
+			return false
+		}
+	}
+	if filter.Model != nil {
+		if logEntry.ActualModelName != *filter.Model {
+			return false
+		}
+	}
+	if filter.HasRetry != nil {
+		hasRetry := logEntry.TotalAttempts > 1
+		if hasRetry != *filter.HasRetry {
+			return false
+		}
+	}
+	if filter.NormalizedKeyword != "" {
+		requestContent := strings.ToLower(logEntry.RequestContent)
+		responseContent := strings.ToLower(logEntry.ResponseContent)
+		errorContent := strings.ToLower(logEntry.Error)
+		if !strings.Contains(requestContent, filter.NormalizedKeyword) &&
+			!strings.Contains(responseContent, filter.NormalizedKeyword) &&
+			!strings.Contains(errorContent, filter.NormalizedKeyword) {
+			return false
+		}
+	}
+	return true
+}
+
+func escapeLikePattern(input string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"%", "\\%",
+		"_", "\\_",
+	)
+	return replacer.Replace(input)
+}
+
+func applyRelayLogDBFilter(query *gorm.DB, filter RelayLogListFilter) *gorm.DB {
+	if filter.StartTime != nil {
+		query = query.Where("time >= ?", *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		query = query.Where("time <= ?", *filter.EndTime)
+	}
+	if filter.Status != nil {
+		if *filter.Status == "success" {
+			query = query.Where("error = ''")
+		} else {
+			query = query.Where("error <> ''")
+		}
+	}
+	if filter.ChannelID != nil {
+		query = query.Where("channel_id = ?", *filter.ChannelID)
+	}
+	if filter.Model != nil {
+		query = query.Where("actual_model_name = ?", *filter.Model)
+	}
+	if filter.HasRetry != nil {
+		if *filter.HasRetry {
+			query = query.Where("total_attempts > 1")
+		} else {
+			query = query.Where("total_attempts <= 1")
+		}
+	}
+	if filter.NormalizedKeyword != "" {
+		likeKeyword := "%" + escapeLikePattern(filter.NormalizedKeyword) + "%"
+		query = query.Where(
+			"LOWER(request_content) LIKE ? ESCAPE '\\' OR LOWER(response_content) LIKE ? ESCAPE '\\' OR LOWER(error) LIKE ? ESCAPE '\\'",
+			likeKeyword,
+			likeKeyword,
+			likeKeyword,
+		)
+	}
+	return query
+}
+
+func RelayLogList(ctx context.Context, filter RelayLogListFilter, page, pageSize int) ([]model.RelayLog, error) {
 	enabled, err := SettingGetBool(model.SettingKeyRelayLogKeepEnabled)
 	if err != nil {
 		return nil, err
 	}
-	hasTimeFilter := startTime != nil && endTime != nil
 
-	// 获取缓存中符合条件的日志
+	filter = normalizeRelayLogListFilter(filter)
+
 	relayLogCacheLock.Lock()
 	var cachedLogs []model.RelayLog
-	for _, log := range relayLogCache {
-		if hasTimeFilter {
-			if log.Time >= int64(*startTime) && log.Time <= int64(*endTime) {
-				cachedLogs = append(cachedLogs, log)
-			}
-		} else {
-			cachedLogs = append(cachedLogs, log)
+	for _, logEntry := range relayLogCache {
+		if filterRelayLog(logEntry, filter) {
+			cachedLogs = append(cachedLogs, logEntry)
 		}
 	}
 	relayLogCacheLock.Unlock()
 
-	// 反转缓存日志顺序（原本新的在末尾，反转后新的在前面，方便分页）
 	for i, j := 0, len(cachedLogs)-1; i < j; i, j = i+1, j-1 {
 		cachedLogs[i], cachedLogs[j] = cachedLogs[j], cachedLogs[i]
 	}
@@ -218,8 +355,6 @@ func RelayLogList(ctx context.Context, startTime, endTime *int, page, pageSize i
 	offset := (page - 1) * pageSize
 
 	var result []model.RelayLog
-
-	// 先从缓存中取（缓存是最新的日志）
 	if offset < cacheCount {
 		cacheEnd := offset + pageSize
 		if cacheEnd > cacheCount {
@@ -228,7 +363,6 @@ func RelayLogList(ctx context.Context, startTime, endTime *int, page, pageSize i
 		result = append(result, cachedLogs[offset:cacheEnd]...)
 	}
 
-	// 如果启用了日志保存，缓存不够时从数据库补充
 	if enabled {
 		remaining := pageSize - len(result)
 		if remaining > 0 {
@@ -237,11 +371,7 @@ func RelayLogList(ctx context.Context, startTime, endTime *int, page, pageSize i
 				dbOffset = offset - cacheCount
 			}
 
-			query := db.GetDB().WithContext(ctx)
-			if hasTimeFilter {
-				query = query.Where("time >= ? AND time <= ?", *startTime, *endTime)
-			}
-
+			query := applyRelayLogDBFilter(db.GetDB().WithContext(ctx), filter)
 			var dbLogs []model.RelayLog
 			if err := query.Order("id DESC").Offset(dbOffset).Limit(remaining).Find(&dbLogs).Error; err != nil {
 				return nil, err

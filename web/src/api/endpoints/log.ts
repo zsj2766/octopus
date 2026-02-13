@@ -8,6 +8,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  * 尝试状态
  */
 export type AttemptStatus = 'success' | 'failed' | 'circuit_break' | 'skipped';
+export type DiffOperation = 'add' | 'replace' | 'remove';
+
+export interface RequestDiffItem {
+    path: string;
+    operation: DiffOperation;
+    before?: unknown;
+    after?: unknown;
+}
+
+export interface HeaderDiffItem {
+    header_key: string;
+    operation: DiffOperation;
+    before?: string[];
+    after?: string[];
+}
 
 /**
  * 单次渠道尝试信息
@@ -22,6 +37,8 @@ export interface ChannelAttempt {
     duration: number;       // 耗时(毫秒)
     sticky?: boolean;
     msg?: string;
+    request_diff?: RequestDiffItem[];
+    header_diff?: HeaderDiffItem[];
 }
 
 /**
@@ -49,12 +66,18 @@ export interface RelayLog {
 /**
  * 日志列表查询参数
  */
-export interface LogListParams {
-    page?: number;
-    page_size?: number;
+export type RelayLogStatusFilter = 'success' | 'failed';
+
+export interface LogFilters {
     start_time?: number;
     end_time?: number;
+    status?: RelayLogStatusFilter;
+    channel_id?: number;
+    model?: string;
+    keyword?: string;
+    has_retry?: boolean;
 }
+
 
 /**
  * 清空日志 Hook
@@ -81,23 +104,130 @@ export function useClearLogs() {
     });
 }
 
-const logsInfiniteQueryKey = (pageSize: number) => ['logs', 'infinite', pageSize] as const;
+type NormalizedLogFilters = Partial<LogFilters>;
+
+function normalizeLogFilters(filters: LogFilters = {}): NormalizedLogFilters {
+    const normalized: NormalizedLogFilters = {};
+
+    if (typeof filters.start_time === 'number') {
+        normalized.start_time = filters.start_time;
+    }
+    if (typeof filters.end_time === 'number') {
+        normalized.end_time = filters.end_time;
+    }
+    if (filters.status) {
+        normalized.status = filters.status;
+    }
+    if (typeof filters.channel_id === 'number') {
+        normalized.channel_id = filters.channel_id;
+    }
+    if (filters.model?.trim()) {
+        normalized.model = filters.model.trim();
+    }
+    if (filters.keyword?.trim()) {
+        normalized.keyword = filters.keyword.trim();
+    }
+    if (typeof filters.has_retry === 'boolean') {
+        normalized.has_retry = filters.has_retry;
+    }
+
+    return normalized;
+}
+
+function matchRelayLogFilters(log: RelayLog, filters: NormalizedLogFilters): boolean {
+    if (typeof filters.start_time === 'number' && log.time < filters.start_time) {
+        return false;
+    }
+    if (typeof filters.end_time === 'number' && log.time > filters.end_time) {
+        return false;
+    }
+    if (filters.status === 'success' && log.error) {
+        return false;
+    }
+    if (filters.status === 'failed' && !log.error) {
+        return false;
+    }
+    if (typeof filters.channel_id === 'number' && log.channel !== filters.channel_id) {
+        return false;
+    }
+    if (filters.model && log.actual_model_name !== filters.model) {
+        return false;
+    }
+
+    const attempts = log.total_attempts ?? log.attempts?.length ?? 0;
+    if (typeof filters.has_retry === 'boolean' && (attempts > 1) !== filters.has_retry) {
+        return false;
+    }
+
+    if (filters.keyword) {
+        const keyword = filters.keyword.toLowerCase();
+        const requestContent = (log.request_content ?? '').toLowerCase();
+        const responseContent = (log.response_content ?? '').toLowerCase();
+        const errorContent = (log.error ?? '').toLowerCase();
+        if (!requestContent.includes(keyword) && !responseContent.includes(keyword) && !errorContent.includes(keyword)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+const logsInfiniteQueryKey = (pageSize: number, filters: NormalizedLogFilters) => ['logs', 'infinite', pageSize, filters] as const;
+
+function buildLogListQueryParams(
+    page: number,
+    pageSize: number,
+    filters: NormalizedLogFilters,
+): Record<string, string | number | boolean> {
+    const params: Record<string, string | number | boolean> = {
+        page,
+        page_size: pageSize,
+    };
+
+    if (typeof filters.start_time === 'number') params.start_time = filters.start_time;
+    if (typeof filters.end_time === 'number') params.end_time = filters.end_time;
+    if (filters.status) params.status = filters.status;
+    if (typeof filters.channel_id === 'number') params.channel_id = filters.channel_id;
+    if (filters.model) params.model = filters.model;
+    if (filters.keyword) params.keyword = filters.keyword;
+    if (typeof filters.has_retry === 'boolean') params.has_retry = filters.has_retry;
+
+    return params;
+}
 
 /**
  * 日志管理 Hook
  * 整合初始加载、SSE 实时推送、滚动加载更多
- * 
+ *
  * @example
  * const { logs, isConnected, hasMore, isLoadingMore, loadMore, clear } = useLogs();
- * 
+ *
  * // logs 自动包含历史日志和实时日志，按时间倒序
  * logs.forEach(log => console.log(log.request_model_name));
- * 
+ *
  * // 滚动到底部时加载更多
  * if (hasMore && !isLoadingMore) loadMore();
  */
-export function useLogs(options: { pageSize?: number } = {}) {
-    const { pageSize = 20 } = options;
+export function useLogs(options: { pageSize?: number; filters?: LogFilters } = {}) {
+    const { pageSize = 20, filters = {} } = options;
+
+    const normalizedFilters = useMemo(
+        () => normalizeLogFilters(filters),
+        [
+            filters.start_time,
+            filters.end_time,
+            filters.status,
+            filters.channel_id,
+            filters.model,
+            filters.keyword,
+            filters.has_retry,
+        ],
+    );
+
+    const logsQueryKey = useMemo(
+        () => logsInfiniteQueryKey(pageSize, normalizedFilters),
+        [pageSize, normalizedFilters],
+    );
 
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -106,13 +236,13 @@ export function useLogs(options: { pageSize?: number } = {}) {
     const queryClient = useQueryClient();
 
     const logsQuery = useInfiniteQuery({
-        queryKey: logsInfiniteQueryKey(pageSize),
+        queryKey: logsQueryKey,
         initialPageParam: 1,
         queryFn: async ({ pageParam }) => {
-            const params = new URLSearchParams();
-            params.set('page', String(pageParam));
-            params.set('page_size', String(pageSize));
-            const result = await apiClient.get<RelayLog[] | null>(`/api/v1/log/list?${params.toString()}`);
+            const result = await apiClient.get<RelayLog[] | null>(
+                '/api/v1/log/list',
+                buildLogListQueryParams(pageParam, pageSize, normalizedFilters),
+            );
             return result ?? [];
         },
         getNextPageParam: (lastPage, allPages) => {
@@ -170,8 +300,10 @@ export function useLogs(options: { pageSize?: number } = {}) {
                 eventSource.onmessage = (event) => {
                     try {
                         const log: RelayLog = JSON.parse(event.data);
+                        if (!matchRelayLogFilters(log, normalizedFilters)) return;
+
                         queryClient.setQueryData(
-                            logsInfiniteQueryKey(pageSize),
+                            logsQueryKey,
                             (old: InfiniteData<RelayLog[], number> | undefined) => {
                                 if (!old) {
                                     return { pages: [[log]], pageParams: [1] };
@@ -182,7 +314,7 @@ export function useLogs(options: { pageSize?: number } = {}) {
 
                                 const firstPage = old.pages[0] ?? [];
                                 return { ...old, pages: [[log, ...firstPage], ...old.pages.slice(1)] };
-                            }
+                            },
                         );
                     } catch (e) {
                         logger.error('解析日志数据失败:', e);
@@ -210,11 +342,11 @@ export function useLogs(options: { pageSize?: number } = {}) {
             eventSourceRef.current = null;
             setIsConnected(false);
         };
-    }, [pageSize, queryClient]);
+    }, [queryClient, logsQueryKey, normalizedFilters]);
 
     const clear = useCallback(() => {
-        queryClient.removeQueries({ queryKey: logsInfiniteQueryKey(pageSize) });
-    }, [pageSize, queryClient]);
+        queryClient.removeQueries({ queryKey: logsQueryKey });
+    }, [logsQueryKey, queryClient]);
 
     return {
         logs,

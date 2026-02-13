@@ -57,20 +57,24 @@ type ChannelKey struct {
 
 // ChannelUpdateRequest 渠道更新请求 - 仅包含变更的数据
 type ChannelUpdateRequest struct {
-	ID            int                    `json:"id" binding:"required"`
-	Name          *string                `json:"name,omitempty"`
-	Type          *outbound.OutboundType `json:"type,omitempty"`
-	Enabled       *bool                  `json:"enabled,omitempty"`
-	BaseUrls      *[]BaseUrl             `json:"base_urls,omitempty"`
-	Model         *string                `json:"model,omitempty"`
-	CustomModel   *string                `json:"custom_model,omitempty"`
-	Proxy         *bool                  `json:"proxy,omitempty"`
-	AutoSync      *bool                  `json:"auto_sync,omitempty"`
-	AutoGroup     *AutoGroupType         `json:"auto_group,omitempty"`
-	CustomHeader  *[]CustomHeader        `json:"custom_header,omitempty"`
-	ChannelProxy  *string                `json:"channel_proxy,omitempty"`
-	ParamOverride *string                `json:"param_override,omitempty"`
-	MatchRegex    *string                `json:"match_regex,omitempty"`
+	ID               int                    `json:"id" binding:"required"`
+	Name             *string                `json:"name,omitempty"`
+	Type             *outbound.OutboundType `json:"type,omitempty"`
+	Enabled          *bool                  `json:"enabled,omitempty"`
+	BaseUrls         *[]BaseUrl             `json:"base_urls,omitempty"`
+	Model            *string                `json:"model,omitempty"`
+	CustomModel      *string                `json:"custom_model,omitempty"`
+	Proxy            *bool                  `json:"proxy,omitempty"`
+	AutoSync         *bool                  `json:"auto_sync,omitempty"`
+	AutoGroup        *AutoGroupType         `json:"auto_group,omitempty"`
+	CustomHeader     *[]CustomHeader        `json:"custom_header,omitempty"`
+	CustomHeaderSet  *bool                  `json:"custom_header_set,omitempty"`
+	ChannelProxy     *string                `json:"channel_proxy,omitempty"`
+	ChannelProxySet  *bool                  `json:"channel_proxy_set,omitempty"`
+	ParamOverride    *string                `json:"param_override,omitempty"`
+	ParamOverrideSet *bool                  `json:"param_override_set,omitempty"`
+	MatchRegex       *string                `json:"match_regex,omitempty"`
+	MatchRegexSet    *bool                  `json:"match_regex_set,omitempty"`
 
 	KeysToAdd    []ChannelKeyAddRequest    `json:"keys_to_add,omitempty"`
 	KeysToUpdate []ChannelKeyUpdateRequest `json:"keys_to_update,omitempty"`

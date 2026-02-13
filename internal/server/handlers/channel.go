@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -96,11 +99,28 @@ func createChannel(c *gin.Context) {
 }
 
 func updateChannel(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidJSON)
+		return
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+
 	var req model.ChannelUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidJSON)
 		return
 	}
+
+	customHeaderSet, channelProxySet, paramOverrideSet, matchRegexSet, err := detectChannelUpdateFieldSet(body)
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidJSON)
+		return
+	}
+	req.CustomHeaderSet = &customHeaderSet
+	req.ChannelProxySet = &channelProxySet
+	req.ParamOverrideSet = &paramOverrideSet
+	req.MatchRegexSet = &matchRegexSet
 	channel, err := op.ChannelUpdate(&req, c.Request.Context())
 	if err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
@@ -174,4 +194,21 @@ func syncChannel(c *gin.Context) {
 func getLastSyncTime(c *gin.Context) {
 	time := task.GetLastSyncModelsTime()
 	resp.Success(c, time)
+}
+
+func detectChannelUpdateFieldSet(body []byte) (customHeaderSet bool, channelProxySet bool, paramOverrideSet bool, matchRegexSet bool, err error) {
+	if len(body) == 0 {
+		return false, false, false, false, nil
+	}
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false, false, false, false, err
+	}
+
+	_, customHeaderSet = payload["custom_header"]
+	_, channelProxySet = payload["channel_proxy"]
+	_, paramOverrideSet = payload["param_override"]
+	_, matchRegexSet = payload["match_regex"]
+	return customHeaderSet, channelProxySet, paramOverrideSet, matchRegexSet, nil
 }

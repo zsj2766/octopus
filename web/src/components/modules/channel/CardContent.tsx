@@ -91,28 +91,25 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
         if (!headersEqual(formData.custom_header, channel.custom_header)) {
             req.custom_header = (formData.custom_header ?? [])
                 .map((h) => ({ header_key: h.header_key.trim(), header_value: h.header_value }))
-                .filter((h) => h.header_key && h.header_value !== '');
+                .filter((h) => h.header_key);
         }
 
         const nextChannelProxy = formData.channel_proxy.trim();
         const curChannelProxy = channel.channel_proxy ?? '';
         if (nextChannelProxy !== curChannelProxy) {
-            // Empty string means "clear" for patch semantics; backend maps it to NULL.
-            req.channel_proxy = nextChannelProxy;
+            req.channel_proxy = nextChannelProxy || null;
         }
 
         const nextParamOverride = formData.param_override.trim();
         const curParamOverride = channel.param_override ?? '';
         if (nextParamOverride !== curParamOverride) {
-            // Empty string means "clear" for patch semantics; backend maps it to NULL.
-            req.param_override = nextParamOverride;
+            req.param_override = nextParamOverride || null;
         }
 
         const nextMatchRegex = formData.match_regex.trim();
         const curMatchRegex = channel.match_regex ?? '';
         if (nextMatchRegex !== curMatchRegex) {
-            // Empty string means "clear" for patch semantics; backend maps it to NULL.
-            req.match_regex = nextMatchRegex;
+            req.match_regex = nextMatchRegex || null;
         }
 
         const originalKeys = channel.keys;

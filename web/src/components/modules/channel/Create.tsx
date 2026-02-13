@@ -41,7 +41,7 @@ export function CreateDialogContent() {
             .map((k) => ({ enabled: k.enabled, channel_key: k.channel_key, remark: k.remark ?? '' }));
         const normalizedHeaders = (formData.custom_header ?? [])
             .map((h) => ({ header_key: h.header_key.trim(), header_value: h.header_value }))
-            .filter((h) => h.header_key && h.header_value !== '');
+            .filter((h) => h.header_key);
 
         const channelProxy = formData.channel_proxy.trim();
         const paramOverride = formData.param_override.trim();

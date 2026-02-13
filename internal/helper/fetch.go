@@ -93,9 +93,15 @@ func fetchOpenAIModels(client *http.Client, ctx context.Context, request model.C
 
 	req.Header.Set("Authorization", "Bearer "+channelKey)
 	for _, header := range request.CustomHeader {
-		if header.HeaderKey != "" {
-			req.Header.Set(header.HeaderKey, header.HeaderValue)
+		headerKey := strings.TrimSpace(header.HeaderKey)
+		if headerKey == "" {
+			continue
 		}
+		if header.HeaderValue == "" {
+			req.Header.Del(headerKey)
+			continue
+		}
+		req.Header.Set(headerKey, header.HeaderValue)
 	}
 
 	resp, err := client.Do(req)
@@ -173,9 +179,15 @@ func fetchGeminiModels(client *http.Client, ctx context.Context, request model.C
 
 		req.Header.Set("X-Goog-Api-Key", channelKey)
 		for _, header := range request.CustomHeader {
-			if header.HeaderKey != "" {
-				req.Header.Set(header.HeaderKey, header.HeaderValue)
+			headerKey := strings.TrimSpace(header.HeaderKey)
+			if headerKey == "" {
+				continue
 			}
+			if header.HeaderValue == "" {
+				req.Header.Del(headerKey)
+				continue
+			}
+			req.Header.Set(headerKey, header.HeaderValue)
 		}
 		if pageToken != "" {
 			q := req.URL.Query()
@@ -256,9 +268,15 @@ func fetchAnthropicModels(client *http.Client, ctx context.Context, request mode
 		req.Header.Set("X-Api-Key", channelKey)
 		req.Header.Set("Anthropic-Version", "2023-06-01")
 		for _, header := range request.CustomHeader {
-			if header.HeaderKey != "" {
-				req.Header.Set(header.HeaderKey, header.HeaderValue)
+			headerKey := strings.TrimSpace(header.HeaderKey)
+			if headerKey == "" {
+				continue
 			}
+			if header.HeaderValue == "" {
+				req.Header.Del(headerKey)
+				continue
+			}
+			req.Header.Set(headerKey, header.HeaderValue)
 		}
 		q := req.URL.Query()
 		if afterID != "" {

@@ -387,6 +387,34 @@
         "list": {
             "noMore": "没有更多日志了"
         },
+        "filter": {
+            "reset": "重置筛选",
+            "time": {
+                "all": "全部时间"
+            },
+            "status": {
+                "all": "全部状态",
+                "success": "成功",
+                "failed": "失败"
+            },
+            "channel": {
+                "all": "全部渠道"
+            },
+            "model": {
+                "all": "全部模型"
+            },
+            "retry": {
+                "all": "全部重试",
+                "yes": "有重试",
+                "no": "无重试"
+            },
+            "keyword": {
+                "placeholder": "关键字搜索",
+                "apply": "应用",
+                "open": "打开关键词筛选",
+                "clear": "清空关键词筛选"
+            }
+        },
         "card": {
             "error": "错误",
             "errorInfo": "错误信息",
@@ -402,6 +430,13 @@
             "firstTokenTime": "首字时间",
             "tokens": "tokens",
             "retryDetails": "重试详情",
+            "requestDiff": "请求体差异",
+            "headerDiff": "Header 差异",
+            "before": "变更前",
+            "after": "变更后",
+            "diffAdd": "新增",
+            "diffReplace": "修改",
+            "diffRemove": "删除",
             "attempts": "次尝试",
             "success": "成功",
             "failed": "失败"
@@ -477,9 +512,17 @@
             "customHeaderKey": "Header Key",
             "customHeaderValue": "Header Value",
             "customHeaderAdd": "添加 Header",
+            "customHeaderHelpTitle": "自定义 Header 说明",
+            "customHeaderHelpDescription": "请求进入后、转发上游前执行。支持新增/覆盖，值留空表示删除该 Header。",
+            "customHeaderHelpExampleAdd": "示例（新增/覆盖）：X-Trace-Id / abc-123",
+            "customHeaderHelpExampleDelete": "示例（删除）：Authorization / （留空）",
             "channelProxy": "渠道代理",
             "channelProxyPlaceholder": "可选：仅对该渠道生效（覆盖全局代理）",
             "paramOverride": "参数覆盖",
+            "paramOverrideHelpTitle": "参数覆盖说明",
+            "paramOverrideHelpDescription": "使用 JSON 对请求体做覆盖（JSON Merge Patch）。请求进入后、转发上游前执行。",
+            "paramOverrideHelpExampleUpdate": "示例（修改）：{\"temperature\":0.2}",
+            "paramOverrideHelpExampleDelete": "示例（删除字段）：{\"stream\":null}",
             "paramOverridePlaceholder": "可选：JSON 字符串，用于覆盖请求参数",
             "model": "模型",
             "enabled": "启用",

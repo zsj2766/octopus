@@ -8,7 +8,7 @@ import JsonView from '@uiw/react-json-view';
 import { githubDarkTheme } from '@uiw/react-json-view/githubDark';
 import { githubLightTheme } from '@uiw/react-json-view/githubLight';
 import { useTheme } from 'next-themes';
-import { type RelayLog, type ChannelAttempt } from '@/api/endpoints/log';
+import { type RelayLog, type ChannelAttempt, type DiffOperation } from '@/api/endpoints/log';
 import { getModelIcon } from '@/lib/model-icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -181,6 +181,108 @@ function DeferredJsonContent({ content, fallbackText }: { content: string | unde
                 </motion.pre>
             )}
         </AnimatePresence>
+    );
+}
+
+function diffValueKey(value: unknown): string {
+    if (value === undefined) return 'undefined';
+    try {
+        return JSON.stringify(value) ?? String(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function buildRequestDiffKey(item: { operation: DiffOperation; path: string; before?: unknown; after?: unknown }, index: number): string {
+    return [
+        'req-diff',
+        item.operation,
+        item.path,
+        diffValueKey(item.before),
+        diffValueKey(item.after),
+        index,
+    ].join('|');
+}
+
+function buildHeaderDiffKey(item: { operation: DiffOperation; header_key: string; before?: string[]; after?: string[] }, index: number): string {
+    return [
+        'header-diff',
+        item.operation,
+        item.header_key,
+        diffValueKey(item.before),
+        diffValueKey(item.after),
+        index,
+    ].join('|');
+}
+
+function DiffBadge({ operation }: { operation: 'add' | 'replace' | 'remove' }) {
+    const t = useTranslations('log.card');
+    const style = operation === 'add'
+        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+        : operation === 'remove'
+            ? 'bg-destructive/10 text-destructive border-destructive/30'
+            : 'bg-amber-500/10 text-amber-600 border-amber-500/30';
+
+    return (
+        <Badge variant="outline" className={cn('text-[10px] uppercase h-5 px-1.5', style)}>
+            {operation === 'add' ? t('diffAdd') : operation === 'remove' ? t('diffRemove') : t('diffReplace')}
+        </Badge>
+    );
+}
+
+function AttemptDiffPanel({ attempt }: { attempt: ChannelAttempt }) {
+    const t = useTranslations('log.card');
+    const requestDiffItems = [...(attempt.request_diff ?? [])].sort((a, b) => a.path.localeCompare(b.path));
+    const headerDiffItems = [...(attempt.header_diff ?? [])].sort((a, b) => a.header_key.localeCompare(b.header_key));
+    const hasRequestDiff = requestDiffItems.length > 0;
+    const hasHeaderDiff = headerDiffItems.length > 0;
+
+    if (!hasRequestDiff && !hasHeaderDiff) {
+        return null;
+    }
+
+    return (
+        <div className="rounded-xl border border-border/60 bg-background/70 p-2.5 flex flex-col gap-2">
+            {hasRequestDiff && (
+                <div className="flex flex-col gap-1.5">
+                    <div className="text-[11px] font-medium text-foreground">{t('requestDiff')}</div>
+                    {requestDiffItems.map((item, idx) => (
+                        <div key={buildRequestDiffKey(item, idx)} className="rounded-lg border border-border/60 bg-muted/30 p-2 text-[11px] space-y-1">
+                            <div className="flex items-center gap-2">
+                                <DiffBadge operation={item.operation} />
+                                <span className="font-mono text-muted-foreground break-all">{item.path}</span>
+                            </div>
+                            {item.before !== undefined && (
+                                <pre className="text-muted-foreground whitespace-pre-wrap wrap-break-word font-mono">{t('before')}: {JSON.stringify(item.before)}</pre>
+                            )}
+                            {item.after !== undefined && (
+                                <pre className="text-muted-foreground whitespace-pre-wrap wrap-break-word font-mono">{t('after')}: {JSON.stringify(item.after)}</pre>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {hasHeaderDiff && (
+                <div className="flex flex-col gap-1.5">
+                    <div className="text-[11px] font-medium text-foreground">{t('headerDiff')}</div>
+                    {headerDiffItems.map((item, idx) => (
+                        <div key={buildHeaderDiffKey(item, idx)} className="rounded-lg border border-border/60 bg-muted/30 p-2 text-[11px] space-y-1">
+                            <div className="flex items-center gap-2">
+                                <DiffBadge operation={item.operation} />
+                                <span className="font-mono text-muted-foreground break-all">{item.header_key}</span>
+                            </div>
+                            {item.before !== undefined && (
+                                <pre className="text-muted-foreground whitespace-pre-wrap wrap-break-word font-mono">{t('before')}: {JSON.stringify(item.before)}</pre>
+                            )}
+                            {item.after !== undefined && (
+                                <pre className="text-muted-foreground whitespace-pre-wrap wrap-break-word font-mono">{t('after')}: {JSON.stringify(item.after)}</pre>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -403,6 +505,7 @@ export function LogCard({ log }: { log: RelayLog }) {
                                                                                 {attempt.msg}
                                                                             </div>
                                                                         )}
+                                                                        <AttemptDiffPanel attempt={attempt} />
                                                                     </div>
                                                                 ))}
                                                             </div>

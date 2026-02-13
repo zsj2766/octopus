@@ -36,11 +36,41 @@ func init() {
 		)
 }
 
+func parseOptionalIntQuery(c *gin.Context, key string) (*int, error) {
+	value := c.Query(key)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func parseOptionalBoolQuery(c *gin.Context, key string) (*bool, error) {
+	value := c.Query(key)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func parseOptionalStringQuery(c *gin.Context, key string) *string {
+	value := c.Query(key)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
 func listLog(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	startTimeStr := c.Query("start_time")
-	endTimeStr := c.Query("end_time")
 
 	if page < 1 {
 		page = 1
@@ -49,23 +79,43 @@ func listLog(c *gin.Context) {
 		pageSize = 20
 	}
 
-	var startTime, endTime *int
-	if startTimeStr != "" && endTimeStr != "" {
-		st, err := strconv.Atoi(startTimeStr)
-		if err != nil {
-			resp.Error(c, http.StatusBadRequest, err.Error())
-			return
-		}
-		et, err := strconv.Atoi(endTimeStr)
-		if err != nil {
-			resp.Error(c, http.StatusBadRequest, err.Error())
-			return
-		}
-		startTime = &st
-		endTime = &et
+	startTime, err := parseOptionalIntQuery(c, "start_time")
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, "invalid start_time")
+		return
+	}
+	endTime, err := parseOptionalIntQuery(c, "end_time")
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, "invalid end_time")
+		return
+	}
+	channelID, err := parseOptionalIntQuery(c, "channel_id")
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, "invalid channel_id")
+		return
+	}
+	hasRetry, err := parseOptionalBoolQuery(c, "has_retry")
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, "invalid has_retry")
+		return
+	}
+	status := parseOptionalStringQuery(c, "status")
+	if status != nil && *status != "success" && *status != "failed" {
+		resp.Error(c, http.StatusBadRequest, "invalid status")
+		return
 	}
 
-	logs, err := op.RelayLogList(c.Request.Context(), startTime, endTime, page, pageSize)
+	filter := op.RelayLogListFilter{
+		StartTime: startTime,
+		EndTime:   endTime,
+		Status:    status,
+		ChannelID: channelID,
+		Model:     parseOptionalStringQuery(c, "model"),
+		Keyword:   parseOptionalStringQuery(c, "keyword"),
+		HasRetry:  hasRetry,
+	}
+
+	logs, err := op.RelayLogList(c.Request.Context(), filter, page, pageSize)
 	if err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return

@@ -100,7 +100,7 @@ export function Card({ channel, stats }: { channel: Channel; stats: StatsMetrics
             .map((k) => ({ enabled: k.enabled, channel_key: k.channel_key.trim(), remark: k.remark ?? '' }));
         const normalizedHeaders = (cloneFormData.custom_header ?? [])
             .map((h) => ({ header_key: h.header_key.trim(), header_value: h.header_value }))
-            .filter((h) => h.header_key && h.header_value !== '');
+            .filter((h) => h.header_key);
 
         createChannel.mutate(
             {
